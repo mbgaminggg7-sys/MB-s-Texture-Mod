@@ -12,7 +12,6 @@ repositories {
 }
 
 loom {
-	splitEnvironmentSourceSets()
 
 	mods {
 		"mbs-texture" {
