@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "mbtexturemenu",
+  "version": "1.0.0",
+  "name": "MB's Texture Menu",
+  "description": "A texture menu in Options: dark/light inventory, dark/light/normal netherite armor, and a waving trim glow with a strength slider.",
+  "authors": ["MB"],
+  "license": "All-Rights-Reserved",
+  "environment": "client",
+  "entrypoints": { "client": ["mb.texturemenu.MBTextureMenuClient"] },
+  "mixins": ["mbtexturemenu.mixins.json"],
+  "depends": { "fabricloader": ">=0.16.0", "minecraft": "~1.21.11", "java": ">=21" }
+}

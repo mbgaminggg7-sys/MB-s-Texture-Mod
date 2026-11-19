@@ -1,0 +1,8 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "mb.texturemenu.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": ["OptionsScreenMixin", "ArmorTrimGlowMixin", "LabelColorMixin"],
+  "injectors": { "defaultRequire": 0 }
+}
