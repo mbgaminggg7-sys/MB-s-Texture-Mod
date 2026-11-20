@@ -1,7 +1,9 @@
 package mb.texturemenu.gui;
 
 import mb.texturemenu.MBConfig;
+import mb.texturemenu.MBConfig.ExtraMode;
 import mb.texturemenu.MBConfig.NetheriteMode;
+import mb.texturemenu.MBConfig.SecretTheme;
 import mb.texturemenu.MBConfig.WaveSpeed;
 import mb.texturemenu.pack.PackManager;
 import net.minecraft.client.gui.GuiGraphics;
@@ -24,6 +26,13 @@ public class MBTextureScreen extends Screen {
         this.startKey = cfg.packKey();
     }
 
+    /** Last choice wins: if a secret theme was covering this setting, it gets switched off quietly. */
+    private void releaseSecret(boolean coversInventory) {
+        if (cfg.secretTheme == SecretTheme.OFF) return;
+        if (cfg.secretTheme == SecretTheme.MB && coversInventory) return; // MB never touches the inventory
+        cfg.secretTheme = SecretTheme.OFF;
+    }
+
     @Override
     protected void init() {
         int bw = 150, gap = 8, full = bw * 2 + gap;
@@ -33,6 +42,7 @@ public class MBTextureScreen extends Screen {
         // row 0: inventory/hotbar/xp switch | wave speed
         addRenderableWidget(Button.builder(inventoryLabel(), b -> {
             cfg.inventoryDark = !cfg.inventoryDark;
+            releaseSecret(true);
             b.setMessage(inventoryLabel());
         }).bounds(x1, y, bw, 20).build());
 
@@ -46,23 +56,37 @@ public class MBTextureScreen extends Screen {
         }).bounds(x2, y, bw, 20).build());
 
         // row 1: netherite armor | netherite tools (sword, pickaxe, axe, shovel, hoe, spear, mace)
-        addMode(x1, y + row, bw, "Netherite Armor", () -> cfg.netherite, m -> cfg.netherite = m);
-        addMode(x2, y + row, bw, "Netherite Tools", () -> cfg.tools, m -> cfg.tools = m);
+        addMode(x1, y + row, bw, "Netherite Armor", () -> cfg.netherite, m -> cfg.netherite = m, () -> releaseSecret(false));
+        addMode(x2, y + row, bw, "Netherite Tools", () -> cfg.tools, m -> cfg.tools = m, () -> releaseSecret(false));
 
         // row 2: diamond armor | diamond tools
-        addMode(x1, y + row * 2, bw, "Diamond Armor", () -> cfg.diamondArmor, m -> cfg.diamondArmor = m);
-        addMode(x2, y + row * 2, bw, "Diamond Tools", () -> cfg.diamondTools, m -> cfg.diamondTools = m);
+        addMode(x1, y + row * 2, bw, "Diamond Armor", () -> cfg.diamondArmor, m -> cfg.diamondArmor = m, () -> {});
+        addMode(x2, y + row * 2, bw, "Diamond Tools", () -> cfg.diamondTools, m -> cfg.diamondTools = m, () -> {});
 
-        // row 3: trim glow slider
-        addRenderableWidget(new GlowSlider(x1, y + row * 3, full, 20, cfg.glow));
+        // row 3: totem + shield (normal / dark / light / diamond)
+        addRenderableWidget(Button.builder(totemLabel(), b -> {
+            cfg.totemShield = switch (cfg.totemShield) {
+                case NORMAL -> ExtraMode.DARK;
+                case DARK -> ExtraMode.LIGHT;
+                case LIGHT -> ExtraMode.DIAMOND;
+                case DIAMOND -> ExtraMode.NORMAL;
+            };
+            releaseSecret(false);
+            b.setMessage(totemLabel());
+        }).bounds(x1, y + row * 3, full, 20).build());
+
+        // row 4: trim glow slider
+        addRenderableWidget(new GlowSlider(x1, y + row * 4, full, 20, cfg.glow));
 
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
-                .bounds(x1, y + row * 4 + 6, full, 20).build());
+                .bounds(x1, y + row * 5 + 6, full, 20).build());
     }
 
-    private void addMode(int x, int y, int w, String name, Supplier<NetheriteMode> get, Consumer<NetheriteMode> set) {
+    private void addMode(int x, int y, int w, String name, Supplier<NetheriteMode> get,
+                         Consumer<NetheriteMode> set, Runnable after) {
         addRenderableWidget(Button.builder(modeLabel(name, get.get()), b -> {
             set.accept(next(get.get()));
+            after.run();
             b.setMessage(modeLabel(name, get.get()));
         }).bounds(x, y, w, 20).build());
     }
@@ -88,6 +112,16 @@ public class MBTextureScreen extends Screen {
         return Component.literal(name + ": " + m);
     }
 
+    private Component totemLabel() {
+        String m = switch (cfg.totemShield) {
+            case NORMAL -> "Normal";
+            case DARK -> "Dark";
+            case LIGHT -> "Light";
+            case DIAMOND -> "Diamond";
+        };
+        return Component.literal("Totem & Shield: " + m);
+    }
+
     private Component waveLabel() {
         String m = switch (cfg.waveSpeed) {
             case SLOW -> "Slow";
@@ -103,7 +137,7 @@ public class MBTextureScreen extends Screen {
         int y = this.height / 6 + 4;
         g.drawCenteredString(this.font, this.title, this.width / 2, y - 18, 0xFFFFFFFF);
         g.drawCenteredString(this.font, Component.literal("Texture changes apply when you press Done"),
-                this.width / 2, y + 26 * 4 + 32, 0xFFAAAAAA);
+                this.width / 2, y + 26 * 5 + 32, 0xFFAAAAAA);
     }
 
     @Override

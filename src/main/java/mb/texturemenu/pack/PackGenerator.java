@@ -28,7 +28,7 @@ import java.util.zip.ZipOutputStream;
  * Each pack is only generated the first time it is needed.
  */
 public final class PackGenerator {
-    private static final String V = " v3.zip";
+    private static final String V = " v5.zip";   // bumped so older generated packs are rebuilt
     public static final String INVENTORY_DARK = "MB Dark Inventory" + V;
     public static final String NETHERITE_DARK = "MB Netherite Armor Dark" + V;
     public static final String NETHERITE_LIGHT = "MB Netherite Armor Light" + V;
@@ -38,6 +38,9 @@ public final class PackGenerator {
     public static final String DIAMOND_LIGHT = "MB Diamond Armor Light" + V;
     public static final String DIAMOND_TOOLS_DARK = "MB Diamond Tools Dark" + V;
     public static final String DIAMOND_TOOLS_LIGHT = "MB Diamond Tools Light" + V;
+    public static final String TOTEM_DARK = "MB Totem Shield Dark" + V;
+    public static final String TOTEM_LIGHT = "MB Totem Shield Light" + V;
+    public static final String TOTEM_DIAMOND = "MB Totem Shield Diamond" + V;
 
     public static String secretName(SecretTheme t) {
         return switch (t) {
@@ -55,7 +58,8 @@ public final class PackGenerator {
 
     private interface Xform { BufferedImage apply(String path, BufferedImage src); }
 
-    private record Spec(String description, List<String> folders, List<String> files, Xform xf) {}
+    /** icon = file name (without .png) in assets/mbtexturemenu/packicons - every pack gets its own picture. */
+    private record Spec(String description, List<String> folders, List<String> files, Xform xf, String icon) {}
 
     private PackGenerator() {}
 
@@ -89,6 +93,13 @@ public final class PackGenerator {
         return l;
     }
 
+    /** Totem of Undying + shield (the shield is drawn from its entity texture; both known locations are tried). */
+    private static List<String> totemFiles() {
+        return List.of("textures/item/totem_of_undying.png",
+                "textures/entity/shield/shield_base_nopattern.png", "textures/entity/shield/shield_base.png",
+                "textures/entity/shield_base_nopattern.png", "textures/entity/shield_base.png");
+    }
+
     @SafeVarargs
     private static List<String> concat(List<String>... lists) {
         List<String> out = new ArrayList<>();
@@ -96,25 +107,37 @@ public final class PackGenerator {
         return out;
     }
 
+    private static Xform grad(int[][] pal) {
+        return (path, img) -> gradient(img, pal, 1.0f);
+    }
+
     private static Spec specFor(String name) {
         if (name.equals(INVENTORY_DARK)) {
             return new Spec("MB's Texture Menu - dark inventory, hotbar and XP bar", GUI_FOLDERS,
-                    concat(HOTBAR, List.of(XP_BG)), px(PackGenerator::darkGui));
+                    concat(HOTBAR, List.of(XP_BG)), px(PackGenerator::darkGui), "inv_dark");
         }
-        if (name.equals(NETHERITE_DARK)) return files("dark netherite armor", armorFiles("netherite"), px(PackGenerator::netheriteDark));
-        if (name.equals(NETHERITE_LIGHT)) return files("light netherite armor", armorFiles("netherite"), px(PackGenerator::netheriteLight));
-        if (name.equals(TOOLS_DARK)) return files("dark netherite tools", toolFiles("netherite", true), px(PackGenerator::netheriteDark));
-        if (name.equals(TOOLS_LIGHT)) return files("light netherite tools", toolFiles("netherite", true), px(PackGenerator::netheriteLight));
-        if (name.equals(DIAMOND_DARK)) return files("dark diamond armor", armorFiles("diamond"), px(PackGenerator::diamondDark));
-        if (name.equals(DIAMOND_LIGHT)) return files("light diamond armor", armorFiles("diamond"), px(PackGenerator::diamondLight));
-        if (name.equals(DIAMOND_TOOLS_DARK)) return files("dark diamond tools", toolFiles("diamond", false), px(PackGenerator::diamondDark));
-        if (name.equals(DIAMOND_TOOLS_LIGHT)) return files("light diamond tools", toolFiles("diamond", false), px(PackGenerator::diamondLight));
+        // dark = replaced with black, light = replaced with white (not just darkened/lightened)
+        if (name.equals(NETHERITE_DARK)) return files("black netherite armor", armorFiles("netherite"), grad(DARK_P), "net_armor_dark");
+        if (name.equals(NETHERITE_LIGHT)) return files("white netherite armor", armorFiles("netherite"), grad(TEAL_P), "net_armor_light");
+        if (name.equals(TOOLS_DARK)) return files("black netherite tools", toolFiles("netherite", true), grad(DARK_P), "net_tools_dark");
+        if (name.equals(TOOLS_LIGHT)) return files("white netherite tools", toolFiles("netherite", true), grad(TEAL_P), "net_tools_light");
+        if (name.equals(DIAMOND_DARK)) return files("black diamond armor", armorFiles("diamond"), grad(DARK_P), "dia_armor_dark");
+        if (name.equals(DIAMOND_LIGHT)) return files("white diamond armor", armorFiles("diamond"), grad(WHITE_P), "dia_armor_light");
+        if (name.equals(DIAMOND_TOOLS_DARK)) return files("black diamond tools", toolFiles("diamond", false), grad(DARK_P), "dia_tools_dark");
+        if (name.equals(DIAMOND_TOOLS_LIGHT)) return files("white diamond tools", toolFiles("diamond", false), grad(WHITE_P), "dia_tools_light");
+        if (name.equals(TOTEM_DARK)) return files("black totem and shield", totemFiles(), grad(DARK_P), "totem_dark");
+        if (name.equals(TOTEM_LIGHT)) return files("white totem and shield", totemFiles(), grad(WHITE_P), "totem_light");
+        if (name.equals(TOTEM_DIAMOND)) return files("diamond totem and shield", totemFiles(), grad(DIAMOND_P), "totem_diamond");
 
         for (SecretTheme t : SecretTheme.values()) {
             if (t == SecretTheme.OFF || !name.equals(secretName(t))) continue;
             if (t == SecretTheme.MB) {
-                return files("MB texture", concat(armorFiles("netherite"),
-                        List.of("textures/item/golden_apple.png", "textures/item/mace.png")), PackGenerator::mbXform);
+                return new Spec("MB's Texture Menu - MB texture", List.of(),
+                        concat(armorFiles("netherite"),
+                                List.of("textures/item/golden_apple.png", "textures/item/mace.png",
+                                        "textures/item/netherite_spear.png", "textures/item/netherite_spear_in_hand.png"),
+                                totemFiles()),
+                        PackGenerator::mbXform, "sec_mb");
             }
             int[][] pal = switch (t) {
                 case GOLD -> GOLD;
@@ -122,14 +145,16 @@ public final class PackGenerator {
                 default -> RED;
             };
             return new Spec("MB secret theme - " + t.name().toLowerCase(), GUI_FOLDERS,
-                    concat(HOTBAR, List.of(HOTBAR_SEL, XP_BG, XP_FG), armorFiles("netherite"), toolFiles("netherite", true)),
-                    (path, img) -> gradient(img, pal, path.startsWith("textures/gui") ? 0.85f : 1.0f));
+                    concat(HOTBAR, List.of(HOTBAR_SEL, XP_BG, XP_FG), armorFiles("netherite"),
+                            toolFiles("netherite", true), totemFiles()),
+                    (path, img) -> gradient(img, pal, path.startsWith("textures/gui") ? 0.85f : 1.0f),
+                    "sec_" + t.name().toLowerCase());
         }
         return null;
     }
 
-    private static Spec files(String desc, List<String> files, Xform xf) {
-        return new Spec("MB's Texture Menu - " + desc, List.of(), files, xf);
+    private static Spec files(String desc, List<String> files, Xform xf, String icon) {
+        return new Spec("MB's Texture Menu - " + desc, List.of(), files, xf, icon);
     }
 
     private static Xform px(IntUnaryOperator f) {
@@ -205,6 +230,12 @@ public final class PackGenerator {
     private static final int[][] EMERALD = {{6, 52, 22}, {10, 120, 45}, {20, 190, 80}, {80, 235, 130}, {200, 255, 220}};
     private static final int[][] RED = {{30, 4, 10}, {92, 10, 26}, {160, 18, 40}, {212, 50, 64}, {255, 150, 150}};
 
+    // black / white makeover palettes: colour is REPLACED, only the shading of the original is kept
+    private static final int[][] DARK_P = {{4, 4, 6}, {14, 14, 18}, {30, 30, 38}, {62, 62, 74}, {120, 122, 138}};
+    private static final int[][] WHITE_P = {{128, 134, 146}, {176, 182, 192}, {214, 219, 226}, {240, 243, 247}, {255, 255, 255}};
+    private static final int[][] TEAL_P = {{70, 96, 94}, {128, 152, 150}, {176, 194, 192}, {222, 232, 231}, {250, 253, 253}};
+    private static final int[][] DIAMOND_P = {{8, 70, 80}, {20, 150, 170}, {40, 210, 215}, {130, 245, 240}, {235, 255, 255}};
+
     private static float lum(int argb) {
         return ((argb >> 16) & 0xFF) * 0.299f + ((argb >> 8) & 0xFF) * 0.587f + (argb & 0xFF) * 0.114f;
     }
@@ -264,6 +295,9 @@ public final class PackGenerator {
         if (path.endsWith("humanoid_leggings/netherite.png")) return mbLeggings(src);
         if (path.endsWith("golden_apple.png")) return mbApple(src);
         if (path.endsWith("mace.png")) return mbMace(src);
+        if (path.endsWith("netherite_spear.png") || path.endsWith("netherite_spear_in_hand.png")) return mbSpear(src);
+        if (path.endsWith("totem_of_undying.png")) return goldTopIcon(mbBW(src));   // totem gets a gold crown on top
+        if (path.contains("shield")) return mbBW(src);
         if (path.endsWith("netherite_helmet.png")) return goldTopIcon(mbBW(src));
         return mbBW(src); // other armor icons
     }
@@ -346,29 +380,12 @@ public final class PackGenerator {
         }
     }
 
-    /** Smile on the chest, with a thin black outline so it pops on the mixed texture. */
-    private static void chestSmile(BufferedImage img) {
-        int[][] dots = {{22, 23}, {25, 23}, {22, 26}, {22, 27}, {23, 28}, {24, 28}, {25, 27}, {25, 26}};
-        for (int[] d : dots) {
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    int x = d[0] + dx, y = d[1] + dy;
-                    if (x >= 20 && x < 28 && y >= 20 && y < 32 && (img.getRGB(x, y) >>> 24) != 0) {
-                        img.setRGB(x, y, 0xFF000000 | BLACK);
-                    }
-                }
-            }
-        }
-        for (int[] d : dots) put(img, d[0], d[1], WHITE);
-    }
-
-    /** 64x32 armor layer: black/white mix + glossy fade, gold helmet top, smile on the chest. */
+    /** 64x32 armor layer: black/white mix + glossy fade everywhere, gold on top of the helmet. */
     private static BufferedImage mbArmorLayer1(BufferedImage src) {
         BufferedImage out = mbBW(src);
         if (out.getWidth() != 64 || out.getHeight() != 32) return out;
         gloss(out);
         goldHelmet(out);
-        chestSmile(out);
         return out;
     }
 
@@ -442,6 +459,56 @@ public final class PackGenerator {
         return out;
     }
 
+    /** Spear -> black & white with a little smile on the blade (works for the 16x16 icon and the 32x32 in-hand texture). */
+    private static BufferedImage mbSpear(BufferedImage src) {
+        BufferedImage out = mbBW(src);
+        int w = src.getWidth(), h = src.getHeight(), k = Math.max(1, w / 16);
+        long sx = 0, sy = 0;
+        int n = 0;
+        for (int y = 0; y < h * 2 / 5; y++) {               // the blade is in the upper part
+            for (int x = 0; x < w; x++) {
+                if ((src.getRGB(x, y) >>> 24) > 40) { sx += x; sy += y; n++; }
+            }
+        }
+        if (n == 0) return out;
+        int hx = (int) (sx / n), hy = (int) (sy / n);
+        int[][] smile = {{-1, 0}, {0, 1}, {1, 0}};
+        for (int[] d : smile) {                       // thin dark backing first so the smile reads clearly
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int a = 0; a < k; a++) {
+                        for (int b = 0; b < k; b++) {
+                            int x = hx + d[0] * k + dx * k + a, y = hy + d[1] * k + dy * k + b;
+                            if (x >= 0 && y >= 0 && x < w && y < h && (src.getRGB(x, y) >>> 24) > 40) {
+                                out.setRGB(x, y, 0xFF000000 | BLACK);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (int[] d : smile) {
+            for (int a = 0; a < k; a++) {
+                for (int b = 0; b < k; b++) {
+                    int x = hx + d[0] * k + a, y = hy + d[1] * k + b;
+                    if (nearOpaque(src, x, y)) put(out, x, y, WHITE);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean nearOpaque(BufferedImage img, int x, int y) {
+        for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                int px = x + dx, py = y + dy;
+                if (px >= 0 && py >= 0 && px < img.getWidth() && py < img.getHeight()
+                        && (img.getRGB(px, py) >>> 24) > 40) return true;
+            }
+        }
+        return false;
+    }
+
     /** Mace -> black & white, with a tiny crown and smile on the head (head = upper right of the icon). */
     private static BufferedImage mbMace(BufferedImage src) {
         BufferedImage out = mbBW(src);
@@ -512,7 +579,7 @@ public final class PackGenerator {
 
         String mcmeta = "{\"pack\":{\"description\":\"" + spec.description() + "\",\"pack_format\":75,"
                 + "\"min_format\":63,\"max_format\":999}}";
-        byte[] icon = readIcon();
+        byte[] icon = readIcon(spec.icon());
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(out))) {
             zip.putNextEntry(new ZipEntry("pack.mcmeta"));
             zip.write(mcmeta.getBytes(StandardCharsets.UTF_8));
@@ -531,12 +598,15 @@ public final class PackGenerator {
         MBTextureMenuClient.LOG.info("Generated {} ({} files)", out.getFileName(), entries.size());
     }
 
-    private static byte[] readIcon() {
-        try (InputStream in = PackGenerator.class.getResourceAsStream("/assets/mbtexturemenu/icon.png")) {
-            return in == null ? null : in.readAllBytes();
-        } catch (IOException e) {
-            return null;
+    /** The pack's own picture, falling back to the general MB logo. */
+    private static byte[] readIcon(String key) {
+        for (String path : new String[]{"/assets/mbtexturemenu/packicons/" + key + ".png", "/assets/mbtexturemenu/icon.png"}) {
+            try (InputStream in = PackGenerator.class.getResourceAsStream(path)) {
+                if (in != null) return in.readAllBytes();
+            } catch (IOException ignored) {
+            }
         }
+        return null;
     }
 
     private static BufferedImage recolor(BufferedImage src, IntUnaryOperator f) {

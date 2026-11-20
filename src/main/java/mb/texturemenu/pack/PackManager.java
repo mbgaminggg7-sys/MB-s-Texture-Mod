@@ -1,6 +1,7 @@
 package mb.texturemenu.pack;
 
 import mb.texturemenu.MBConfig;
+import mb.texturemenu.MBConfig.ExtraMode;
 import mb.texturemenu.MBConfig.NetheriteMode;
 import mb.texturemenu.MBConfig.SecretTheme;
 import net.minecraft.client.Minecraft;
@@ -29,6 +30,12 @@ public final class PackManager {
         add(wanted, cfg.tools, PackGenerator.TOOLS_DARK, PackGenerator.TOOLS_LIGHT);
         add(wanted, cfg.diamondArmor, PackGenerator.DIAMOND_DARK, PackGenerator.DIAMOND_LIGHT);
         add(wanted, cfg.diamondTools, PackGenerator.DIAMOND_TOOLS_DARK, PackGenerator.DIAMOND_TOOLS_LIGHT);
+        switch (cfg.totemShield) {
+            case DARK -> wanted.add(PackGenerator.TOTEM_DARK);
+            case LIGHT -> wanted.add(PackGenerator.TOTEM_LIGHT);
+            case DIAMOND -> wanted.add(PackGenerator.TOTEM_DIAMOND);
+            default -> {}
+        }
         if (cfg.secretTheme != SecretTheme.OFF) wanted.add(PackGenerator.secretName(cfg.secretTheme)); // last = on top
 
         for (String name : wanted) PackGenerator.ensure(mc, name);

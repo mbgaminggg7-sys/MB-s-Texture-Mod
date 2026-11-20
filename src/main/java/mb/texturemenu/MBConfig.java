@@ -18,6 +18,9 @@ public class MBConfig {
 
     public enum SecretTheme { OFF, GOLD, EMERALD, RED, MB }
 
+    /** Totem of Undying + shield. */
+    public enum ExtraMode { NORMAL, DARK, LIGHT, DIAMOND }
+
     /** Dark inventory + hotbar + XP bar background. */
     public boolean inventoryDark = false;
     public NetheriteMode netherite = NetheriteMode.NORMAL;
@@ -25,6 +28,7 @@ public class MBConfig {
     public NetheriteMode tools = NetheriteMode.NORMAL;
     public NetheriteMode diamondArmor = NetheriteMode.NORMAL;
     public NetheriteMode diamondTools = NetheriteMode.NORMAL;
+    public ExtraMode totemShield = ExtraMode.NORMAL;
     public WaveSpeed waveSpeed = WaveSpeed.NORMAL;
     public SecretTheme secretTheme = SecretTheme.OFF;
     /** 0.0 - 1.0, how strong the trim glow is. */
@@ -56,6 +60,7 @@ public class MBConfig {
         if (tools == null) tools = NetheriteMode.NORMAL;
         if (diamondArmor == null) diamondArmor = NetheriteMode.NORMAL;
         if (diamondTools == null) diamondTools = NetheriteMode.NORMAL;
+        if (totemShield == null) totemShield = ExtraMode.NORMAL;
         if (waveSpeed == null) waveSpeed = WaveSpeed.NORMAL;
         if (secretTheme == null) secretTheme = SecretTheme.OFF;
         glow = Math.max(0f, Math.min(1f, glow));
@@ -64,7 +69,7 @@ public class MBConfig {
 
     /** Anything that changes which resource packs are on. */
     public String packKey() {
-        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + secretTheme;
+        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme;
     }
 
     /** Inventory title text must be light on dark backgrounds. */
