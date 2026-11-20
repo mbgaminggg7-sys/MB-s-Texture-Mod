@@ -1,6 +1,8 @@
 package mb.texturemenu.pack;
 
 import mb.texturemenu.MBConfig;
+import mb.texturemenu.MBConfig.NetheriteMode;
+import mb.texturemenu.MBConfig.SecretTheme;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.packs.repository.PackRepository;
 
@@ -13,21 +15,30 @@ public final class PackManager {
 
     private PackManager() {}
 
+    private static void add(List<String> wanted, NetheriteMode m, String dark, String light) {
+        if (m == NetheriteMode.DARK) wanted.add(dark);
+        else if (m == NetheriteMode.LIGHT) wanted.add(light);
+    }
+
     public static void apply(Minecraft mc) {
-        PackGenerator.ensureAll(mc);
         MBConfig cfg = MBConfig.get();
+
+        List<String> wanted = new ArrayList<>();
+        if (cfg.inventoryDark) wanted.add(PackGenerator.INVENTORY_DARK);
+        add(wanted, cfg.netherite, PackGenerator.NETHERITE_DARK, PackGenerator.NETHERITE_LIGHT);
+        add(wanted, cfg.tools, PackGenerator.TOOLS_DARK, PackGenerator.TOOLS_LIGHT);
+        add(wanted, cfg.diamondArmor, PackGenerator.DIAMOND_DARK, PackGenerator.DIAMOND_LIGHT);
+        add(wanted, cfg.diamondTools, PackGenerator.DIAMOND_TOOLS_DARK, PackGenerator.DIAMOND_TOOLS_LIGHT);
+        if (cfg.secretTheme != SecretTheme.OFF) wanted.add(PackGenerator.secretName(cfg.secretTheme)); // last = on top
+
+        for (String name : wanted) PackGenerator.ensure(mc, name);
+
         PackRepository repo = mc.getResourcePackRepository();
         repo.reload(); // pick up the zips we just wrote
 
         List<String> selected = new ArrayList<>(repo.getSelectedIds());
         selected.removeIf(id -> id.startsWith(PREFIX));
-
-        if (cfg.inventoryDark) selected.add("file/" + PackGenerator.INVENTORY_DARK);
-        switch (cfg.netherite) {
-            case DARK -> selected.add("file/" + PackGenerator.NETHERITE_DARK);
-            case LIGHT -> selected.add("file/" + PackGenerator.NETHERITE_LIGHT);
-            default -> {}
-        }
+        for (String name : wanted) selected.add("file/" + name);
 
         repo.setSelected(selected);
         mc.options.updateResourcePacks(repo);
