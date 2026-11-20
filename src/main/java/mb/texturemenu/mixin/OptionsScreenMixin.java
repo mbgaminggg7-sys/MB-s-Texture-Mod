@@ -26,6 +26,7 @@ public abstract class OptionsScreenMixin extends Screen {
                 .bounds(6, 6, 130, 20).build());
     }
 
+    /** Reads the Alt key straight from GLFW (works no matter how Minecraft names its input classes). */
     private static boolean mb$altDown() {
         long window = GLFW.glfwGetCurrentContext();
         if (window == 0L) return false;

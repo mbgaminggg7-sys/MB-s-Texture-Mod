@@ -28,7 +28,7 @@ import java.util.zip.ZipOutputStream;
  * Each pack is only generated the first time it is needed.
  */
 public final class PackGenerator {
-    private static final String V = " v2.zip";
+    private static final String V = " v3.zip";
     public static final String INVENTORY_DARK = "MB Dark Inventory" + V;
     public static final String NETHERITE_DARK = "MB Netherite Armor Dark" + V;
     public static final String NETHERITE_LIGHT = "MB Netherite Armor Light" + V;
@@ -84,6 +84,7 @@ public final class PackGenerator {
         for (String t : List.of("sword", "pickaxe", "axe", "shovel", "hoe", "spear")) {
             l.add("textures/item/" + mat + "_" + t + ".png");
         }
+        l.add("textures/item/" + mat + "_spear_in_hand.png"); // 32x32 texture used when held
         if (withMace) l.add("textures/item/mace.png");
         return l;
     }
@@ -142,6 +143,12 @@ public final class PackGenerator {
             Path dir = mc.getResourcePackDirectory();
             Files.createDirectories(dir);
             for (String old : LEGACY) Files.deleteIfExists(dir.resolve(old));
+            try (var stream = Files.list(dir)) {            // remove our packs from older mod versions
+                for (Path f : (Iterable<Path>) stream::iterator) {
+                    String n = f.getFileName().toString();
+                    if (n.startsWith("MB ") && n.endsWith(".zip") && !n.endsWith(V)) Files.deleteIfExists(f);
+                }
+            }
 
             Path out = dir.resolve(zipName);
             if (Files.exists(out)) return;
@@ -246,7 +253,7 @@ public final class PackGenerator {
         return (pal[4][0] << 16) | (pal[4][1] << 8) | pal[4][2];
     }
 
-    // ================================================================ MB texture (black & white + smile/crown)
+    // ================================================================ MB texture (black & white, glossy, gold, smile)
 
     private static final int YELLOW = 0xFFFFE200;
     private static final int WHITE = 0xFFF5F5F5;
@@ -254,9 +261,11 @@ public final class PackGenerator {
 
     private static BufferedImage mbXform(String path, BufferedImage src) {
         if (path.endsWith("humanoid/netherite.png")) return mbArmorLayer1(src);
+        if (path.endsWith("humanoid_leggings/netherite.png")) return mbLeggings(src);
         if (path.endsWith("golden_apple.png")) return mbApple(src);
         if (path.endsWith("mace.png")) return mbMace(src);
-        return mbBW(src); // leggings layer + armor icons
+        if (path.endsWith("netherite_helmet.png")) return goldTopIcon(mbBW(src));
+        return mbBW(src); // other armor icons
     }
 
     /** Mostly black with white highlights. */
@@ -282,37 +291,113 @@ public final class PackGenerator {
         if (x >= 0 && y >= 0 && x < img.getWidth() && y < img.getHeight()) img.setRGB(x, y, argb);
     }
 
-    /** 64x32 armor layer: helmet fully black with a little crown, chestplate with a smile. */
+    private static int mix(int argb, int rgb, float t) {
+        int a = argb >>> 24;
+        int r = Math.round(((argb >> 16) & 0xFF) * (1 - t) + ((rgb >> 16) & 0xFF) * t);
+        int g = Math.round(((argb >> 8) & 0xFF) * (1 - t) + ((rgb >> 8) & 0xFF) * t);
+        int b = Math.round((argb & 0xFF) * (1 - t) + (rgb & 0xFF) * t);
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    /** Glossy fade: bright sheen at the top of every face, fading to deeper black at the bottom. */
+    private static void gloss(BufferedImage img) {
+        int[][] regions = {{0, 31, 8, 15}, {0, 55, 20, 31}}; // head faces, body/arms/legs faces
+        for (int[] g : regions) {
+            for (int y = g[2]; y <= g[3]; y++) {
+                float f = (y - g[2]) / (float) (g[3] - g[2]);       // 0 top -> 1 bottom
+                float sheen = 0.34f * (float) Math.pow(1 - f, 1.5);
+                float dark = 0.80f + 0.20f * (1 - f);
+                for (int x = g[0]; x <= g[1] && x < img.getWidth(); x++) {
+                    int p = img.getRGB(x, y);
+                    if ((p >>> 24) == 0) continue;
+                    int c = mix(p, 0x000000, 1 - dark);
+                    img.setRGB(x, y, mix(c, 0xFFFFFF, sheen));
+                }
+            }
+        }
+    }
+
+    private static int goldAt(int argb) {
+        float v = (argb & 0xFF) / 255f;
+        return sample(GOLD, 0.45f + 0.55f * v);
+    }
+
+    /** Normal-looking helmet (black/white mix) with gold coming down from the top, like a crown. */
+    private static void goldHelmet(BufferedImage img) {
+        for (int y = 0; y < 8; y++) {                                   // top face
+            for (int x = 8; x < 16; x++) {
+                int p = img.getRGB(x, y);
+                if ((p >>> 24) != 0) img.setRGB(x, y, (p & 0xFF000000) | goldAt(p));
+            }
+        }
+        int[] faceX = {0, 8, 16, 24};                                  // right, front, left, back
+        float[] amt = {0.85f, 0.55f, 0.22f};
+        for (int fx : faceX) {
+            for (int r = 0; r < amt.length; r++) {
+                for (int x = fx; x < fx + 8; x++) {
+                    int p = img.getRGB(x, 8 + r);
+                    if ((p >>> 24) != 0) img.setRGB(x, 8 + r, mix(p, goldAt(p), amt[r]));
+                }
+            }
+        }
+        for (int x = 8; x < 16; x += 2) {                               // little crown teeth on the front
+            int p = img.getRGB(x, 11);
+            if ((p >>> 24) != 0) img.setRGB(x, 11, mix(p, goldAt(p), 0.6f));
+        }
+    }
+
+    /** Smile on the chest, with a thin black outline so it pops on the mixed texture. */
+    private static void chestSmile(BufferedImage img) {
+        int[][] dots = {{22, 23}, {25, 23}, {22, 26}, {22, 27}, {23, 28}, {24, 28}, {25, 27}, {25, 26}};
+        for (int[] d : dots) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    int x = d[0] + dx, y = d[1] + dy;
+                    if (x >= 20 && x < 28 && y >= 20 && y < 32 && (img.getRGB(x, y) >>> 24) != 0) {
+                        img.setRGB(x, y, 0xFF000000 | BLACK);
+                    }
+                }
+            }
+        }
+        for (int[] d : dots) put(img, d[0], d[1], WHITE);
+    }
+
+    /** 64x32 armor layer: black/white mix + glossy fade, gold helmet top, smile on the chest. */
     private static BufferedImage mbArmorLayer1(BufferedImage src) {
         BufferedImage out = mbBW(src);
         if (out.getWidth() != 64 || out.getHeight() != 32) return out;
-
-        for (int y = 0; y < 16; y++) {            // whole head area -> black
-            for (int x = 0; x < 64; x++) {
-                int a = out.getRGB(x, y) >>> 24;
-                if (a != 0) out.setRGB(x, y, (a << 24) | BLACK);
-            }
-        }
-        String[] crown = {".Y.YY.Y.", ".YYYYYY.", ".YYYYYY."};   // head front face starts at (8,8)
-        for (int r = 0; r < crown.length; r++) {
-            for (int c = 0; c < 8; c++) if (crown[r].charAt(c) == 'Y') put(out, 8 + c, 9 + r, YELLOW);
-        }
-        // body front face starts at (20,20), 8 wide x 12 tall - black patch so the smile stands out
-        for (int y = 20; y < 32; y++) {
-            for (int x = 20; x < 28; x++) {
-                int a = out.getRGB(x, y) >>> 24;
-                if (a != 0) out.setRGB(x, y, (a << 24) | BLACK);
-            }
-        }
-        put(out, 22, 23, WHITE); put(out, 25, 23, WHITE);                     // eyes
-        put(out, 22, 26, WHITE); put(out, 22, 27, WHITE);                     // smile
-        put(out, 23, 28, WHITE); put(out, 24, 28, WHITE);
-        put(out, 25, 27, WHITE); put(out, 25, 26, WHITE);
+        gloss(out);
+        goldHelmet(out);
+        chestSmile(out);
         return out;
     }
 
-    /** Golden apple -> black apple with a crown, eyes and a smile (shape comes from the original's outline). */
+    private static BufferedImage mbLeggings(BufferedImage src) {
+        BufferedImage out = mbBW(src);
+        if (out.getWidth() == 64 && out.getHeight() == 32) gloss(out);
+        return out;
+    }
+
+    /** Helmet icon: a bit of gold on the top rows. */
+    private static BufferedImage goldTopIcon(BufferedImage img) {
+        int minY = -1;
+        for (int y = 0; y < img.getHeight() && minY < 0; y++) {
+            for (int x = 0; x < img.getWidth(); x++) if ((img.getRGB(x, y) >>> 24) > 40) { minY = y; break; }
+        }
+        if (minY < 0) return img;
+        float[] amt = {0.85f, 0.5f, 0.2f};
+        for (int r = 0; r < amt.length; r++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                int p = img.getRGB(x, minY + r);
+                if ((p >>> 24) > 40) img.setRGB(x, minY + r, mix(p, goldAt(p), amt[r]));
+            }
+        }
+        return img;
+    }
+
+    /** Golden apple -> glossy black apple (keeps the original's shading) with a crown, eyes and a smile. */
     private static BufferedImage mbApple(BufferedImage src) {
+        float[] rg = range(src);
         int minX = 99, maxX = -1, minY = 99;
         for (int y = 0; y < src.getHeight(); y++) {
             for (int x = 0; x < src.getWidth(); x++) {
@@ -322,21 +407,38 @@ public final class PackGenerator {
             }
         }
         BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        int cx = (minX + maxX) / 2, top = minY;
         for (int y = 0; y < src.getHeight(); y++) {
             for (int x = 0; x < src.getWidth(); x++) {
-                int a = src.getRGB(x, y) >>> 24;
-                if (a != 0) out.setRGB(x, y, (a << 24) | 0x121212);
+                int p = src.getRGB(x, y);
+                int a = p >>> 24;
+                if (a == 0) continue;
+                float v = Math.max(0f, Math.min(1f, (lum(p) - rg[0]) / (rg[1] - rg[0])));
+                float g = 20 + v * 70;                       // charcoal -> grey, keeps the apple's own shading
+                if (v > 0.9f) g = 215 + (v - 0.9f) * 400;    // its original shine becomes a white glint
+                if (x > cx + 2 && y > top + 7) g *= 0.72f;   // darker rim bottom-right for roundness
+                int gi = Math.max(0, Math.min(255, Math.round(g)));
+                int r = Math.round(gi * 0.93f), b = Math.min(255, Math.round(gi * 1.14f));  // faint cool tint = glossy
+                out.setRGB(x, y, (a << 24) | (r << 16) | (gi << 8) | b);
             }
         }
         if (maxX < 0) return out;
-        int cx = (minX + maxX) / 2, top = minY;
+        // gloss streak, top-left
+        int[][] streak = {{-4, 3}, {-4, 4}, {-3, 2}, {-2, 2}};
+        for (int[] d : streak) {
+            int x = cx + d[0], y = top + d[1];
+            if (x >= 0 && y >= 0 && x < out.getWidth() && y < out.getHeight() && (out.getRGB(x, y) >>> 24) != 0) {
+                out.setRGB(x, y, 0xFFCFD6E0);
+            }
+        }
         String[] crown = {"Y.YY.Y", "YYYYYY", "YYYYYY"};
         for (int r = 0; r < crown.length; r++) {
             for (int c = 0; c < 6; c++) if (crown[r].charAt(c) == 'Y') put(out, cx - 3 + c, top + 1 + r, YELLOW);
         }
-        put(out, cx - 3, top + 6, WHITE); put(out, cx + 2, top + 6, WHITE);   // eyes
-        put(out, cx - 3, top + 8, WHITE); put(out, cx + 2, top + 8, WHITE);   // smile
-        for (int x = cx - 2; x <= cx + 1; x++) put(out, x, top + 9, WHITE);
+        // eyes + smile
+        int[][] face = {{cx - 3, top + 6}, {cx + 2, top + 6}, {cx - 3, top + 8}, {cx + 2, top + 8},
+                {cx - 2, top + 9}, {cx - 1, top + 9}, {cx, top + 9}, {cx + 1, top + 9}};
+        for (int[] d : face) put(out, d[0], d[1], WHITE);
         return out;
     }
 

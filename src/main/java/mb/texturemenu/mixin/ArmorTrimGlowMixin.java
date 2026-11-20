@@ -1,24 +1,27 @@
 package mb.texturemenu.mixin;
 
-import com.llamalad7.mixinextras.sugar.Local;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.mojang.blaze3d.vertex.PoseStack;
 import mb.texturemenu.GlowHelper;
-import net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
+import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * Brightens the light value of any worn armor piece that HAS A TRIM, with a wave that climbs
+ * Worn armor goes through HumanoidArmorLayer.renderArmorPiece(poseStack, collector, stack, slot, light, state).
+ * We wrap it and raise the light value of pieces that HAVE A TRIM, in a wave that climbs
  * boots -> leggings -> chestplate -> helmet.
- *
- * This hooks only the method name and its single int (the light), so it survives the rendering
- * changes in recent versions (the old version hooked exact internal calls and silently missed).
  */
-@Mixin(EquipmentLayerRenderer.class)
+@Mixin(HumanoidArmorLayer.class)
 public class ArmorTrimGlowMixin {
-    @ModifyVariable(method = "renderLayers", at = @At("HEAD"), argsOnly = true, ordinal = 0, require = 0)
-    private int mb$glowLight(int light, @Local(argsOnly = true) ItemStack stack) {
-        return GlowHelper.hasTrim(stack) ? GlowHelper.apply(light, stack) : light;
+    @WrapMethod(method = "renderArmorPiece")
+    private void mb$glow(PoseStack poseStack, SubmitNodeCollector collector, ItemStack stack,
+                         EquipmentSlot slot, int light, HumanoidRenderState state, Operation<Void> original) {
+        int newLight = GlowHelper.hasTrim(stack) ? GlowHelper.apply(light, slot) : light;
+        original.call(poseStack, collector, stack, slot, newLight, state);
     }
 }

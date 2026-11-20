@@ -2,6 +2,7 @@ package mb.texturemenu;
 
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 
 /** Works out the animated "glow" for trimmed armor. */
@@ -11,16 +12,16 @@ public final class GlowHelper {
 
     private GlowHelper() {}
 
-    public static int apply(int light, ItemStack stack) {
+    public static int apply(int light, EquipmentSlot slot) {
         float g = MBConfig.get().glow;
         if (g <= 0f) return light;
 
-        int rank = rankOf(stack); // boots 0 -> helmet 3
+        int rank = rankOf(slot); // boots 0 -> helmet 3
         long period = MBConfig.get().waveSpeed.ms; // one full wave
         double t = (System.currentTimeMillis() % period) / (double) period * Math.PI * 2.0;
         double wave = 0.5 + 0.5 * Math.sin(t - rank * STEP); // higher pieces peak later = wave climbs up
-        // always a little glow (0.35), the wave adds the rest. 0.85 keeps it from getting too bright.
-        float amount = (float) (g * (0.35 + 0.65 * wave) * 0.85);
+        // always a little glow (40%), the wave adds the rest; slider scales the whole thing
+        float amount = (float) Math.min(1.0, g * 1.4 * (0.4 + 0.6 * wave));
         int out = lerpToFullBright(light, amount);
         if (!logged) {
             logged = true;
@@ -33,10 +34,8 @@ public final class GlowHelper {
         return stack != null && stack.get(DataComponents.TRIM) != null;
     }
 
-    private static int rankOf(ItemStack stack) {
-        var eq = stack.get(DataComponents.EQUIPPABLE);
-        if (eq == null) return 0;
-        return switch (eq.slot()) {
+    private static int rankOf(EquipmentSlot slot) {
+        return switch (slot) {
             case FEET -> 0;
             case LEGS -> 1;
             case CHEST -> 2;
