@@ -27,9 +27,9 @@ public class MBTextureScreen extends Screen {
     }
 
     /** Last choice wins: if a secret theme was covering this setting, it gets switched off quietly. */
-    private void releaseSecret(boolean coversInventory) {
+    private void releaseSecret(boolean isInventory) {
         if (cfg.secretTheme == SecretTheme.OFF) return;
-        if (cfg.secretTheme == SecretTheme.MB && coversInventory) return; // MB never touches the inventory
+        if (cfg.secretTheme == SecretTheme.MB && isInventory) return; // MB never touches the inventory
         cfg.secretTheme = SecretTheme.OFF;
     }
 
@@ -60,8 +60,8 @@ public class MBTextureScreen extends Screen {
         addMode(x2, y + row, bw, "Netherite Tools", () -> cfg.tools, m -> cfg.tools = m, () -> releaseSecret(false));
 
         // row 2: diamond armor | diamond tools
-        addMode(x1, y + row * 2, bw, "Diamond Armor", () -> cfg.diamondArmor, m -> cfg.diamondArmor = m, () -> {});
-        addMode(x2, y + row * 2, bw, "Diamond Tools", () -> cfg.diamondTools, m -> cfg.diamondTools = m, () -> {});
+        addMode(x1, y + row * 2, bw, "Diamond Armor", () -> cfg.diamondArmor, m -> cfg.diamondArmor = m, () -> releaseSecret(false));
+        addMode(x2, y + row * 2, bw, "Diamond Tools", () -> cfg.diamondTools, m -> cfg.diamondTools = m, () -> releaseSecret(false));
 
         // row 3: totem + shield (normal / dark / light / diamond)
         addRenderableWidget(Button.builder(totemLabel(), b -> {

@@ -16,7 +16,7 @@ public class MBConfig {
         WaveSpeed(long ms) { this.ms = ms; }
     }
 
-    public enum SecretTheme { OFF, GOLD, EMERALD, RED, MB }
+    public enum SecretTheme { OFF, GOLD, EMERALD, RED, MB, RAINBOW, DIAMOND }
 
     /** Totem of Undying + shield. */
     public enum ExtraMode { NORMAL, DARK, LIGHT, DIAMOND }

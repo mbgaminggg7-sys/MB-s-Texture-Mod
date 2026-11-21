@@ -28,7 +28,7 @@ import java.util.zip.ZipOutputStream;
  * Each pack is only generated the first time it is needed.
  */
 public final class PackGenerator {
-    private static final String V = " v5.zip";   // bumped so older generated packs are rebuilt
+    private static final String V = " v6.zip";   // bumped so older generated packs are rebuilt
     public static final String INVENTORY_DARK = "MB Dark Inventory" + V;
     public static final String NETHERITE_DARK = "MB Netherite Armor Dark" + V;
     public static final String NETHERITE_LIGHT = "MB Netherite Armor Light" + V;
@@ -48,6 +48,8 @@ public final class PackGenerator {
             case EMERALD -> "MB Secret Emerald" + V;
             case RED -> "MB Secret Red" + V;
             case MB -> "MB Secret MB" + V;
+            case RAINBOW -> "MB Secret Rainbow" + V;
+            case DIAMOND -> "MB Secret Diamond" + V;
             default -> null;
         };
     }
@@ -131,24 +133,28 @@ public final class PackGenerator {
 
         for (SecretTheme t : SecretTheme.values()) {
             if (t == SecretTheme.OFF || !name.equals(secretName(t))) continue;
+            // every theme covers netherite AND diamond armor/tools, mace, spear, totem and shield
+            List<String> items = concat(armorFiles("netherite"), armorFiles("diamond"),
+                    toolFiles("netherite", true), toolFiles("diamond", false), totemFiles());
+            String icon = "sec_" + t.name().toLowerCase();
             if (t == SecretTheme.MB) {
                 return new Spec("MB's Texture Menu - MB texture", List.of(),
-                        concat(armorFiles("netherite"),
-                                List.of("textures/item/golden_apple.png", "textures/item/mace.png",
-                                        "textures/item/netherite_spear.png", "textures/item/netherite_spear_in_hand.png"),
-                                totemFiles()),
-                        PackGenerator::mbXform, "sec_mb");
+                        concat(items, List.of("textures/item/golden_apple.png", "textures/item/cooked_beef.png",
+                                "textures/item/ender_pearl.png")), PackGenerator::mbXform, icon);
+            }
+            List<String> all = concat(HOTBAR, List.of(HOTBAR_SEL, XP_BG, XP_FG), items);
+            if (t == SecretTheme.RAINBOW) {
+                return new Spec("MB secret theme - rainbow", GUI_FOLDERS, all,
+                        (path, img) -> rainbow(img, path.startsWith("textures/gui")), icon);
             }
             int[][] pal = switch (t) {
                 case GOLD -> GOLD;
                 case EMERALD -> EMERALD;
+                case DIAMOND -> DIAMOND_P;
                 default -> RED;
             };
-            return new Spec("MB secret theme - " + t.name().toLowerCase(), GUI_FOLDERS,
-                    concat(HOTBAR, List.of(HOTBAR_SEL, XP_BG, XP_FG), armorFiles("netherite"),
-                            toolFiles("netherite", true), totemFiles()),
-                    (path, img) -> gradient(img, pal, path.startsWith("textures/gui") ? 0.85f : 1.0f),
-                    "sec_" + t.name().toLowerCase());
+            return new Spec("MB secret theme - " + t.name().toLowerCase(), GUI_FOLDERS, all,
+                    (path, img) -> gradient(img, pal, path.startsWith("textures/gui") ? 0.85f : 1.0f), icon);
         }
         return null;
     }
@@ -291,15 +297,65 @@ public final class PackGenerator {
     private static final int BLACK = 0x0E0E0E;
 
     private static BufferedImage mbXform(String path, BufferedImage src) {
-        if (path.endsWith("humanoid/netherite.png")) return mbArmorLayer1(src);
-        if (path.endsWith("humanoid_leggings/netherite.png")) return mbLeggings(src);
+        if (path.endsWith("humanoid/netherite.png") || path.endsWith("humanoid/diamond.png")) return mbArmorLayer1(src);
+        if (path.endsWith("humanoid_leggings/netherite.png") || path.endsWith("humanoid_leggings/diamond.png")) return mbLeggings(src);
         if (path.endsWith("golden_apple.png")) return mbApple(src);
+        if (path.endsWith("cooked_beef.png")) return mbSteak(src);
+        if (path.endsWith("ender_pearl.png")) return mbPearl(src);
         if (path.endsWith("mace.png")) return mbMace(src);
-        if (path.endsWith("netherite_spear.png") || path.endsWith("netherite_spear_in_hand.png")) return mbSpear(src);
+        if (path.contains("_spear")) return mbSpear(src);
         if (path.endsWith("totem_of_undying.png")) return goldTopIcon(mbBW(src));   // totem gets a gold crown on top
         if (path.contains("shield")) return mbBW(src);
-        if (path.endsWith("netherite_helmet.png")) return goldTopIcon(mbBW(src));
+        if (path.endsWith("_helmet.png")) return goldTopIcon(mbBW(src));
+        if (path.endsWith("_sword.png") || path.endsWith("_axe.png") || path.endsWith("_pickaxe.png")) return mbTool(src, true);
+        if (path.endsWith("_shovel.png") || path.endsWith("_hoe.png")) return mbTool(src, false);
         return mbBW(src); // other armor icons
+    }
+
+    /** Wooden handle pixels (brown) - everything else on a tool is the metal head/blade. */
+    private static boolean brownish(int argb) {
+        int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+        return r > b + 18 && r >= g;
+    }
+
+    /** Black & white tool; sword/axe/pickaxe get a sharp YELLOW edge along the top-left of the head/blade. */
+    private static BufferedImage mbTool(BufferedImage src, boolean yellowEdge) {
+        BufferedImage out = mbBW(src);
+        if (!yellowEdge) return out;
+        float[] rg = range(src);
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                int p = src.getRGB(x, y);
+                if ((p >>> 24) < 40 || brownish(p)) continue;
+                boolean top = y == 0 || (src.getRGB(x, y - 1) >>> 24) < 40;
+                boolean left = x == 0 || (src.getRGB(x - 1, y) >>> 24) < 40;
+                if (!top && !left) continue;
+                float t = Math.max(0f, Math.min(1f, (lum(p) - rg[0]) / (rg[1] - rg[0])));
+                float k = 0.78f + 0.22f * t;                              // keeps a little shading in the yellow
+                int r = Math.round(255 * k), g = Math.round(214 * k);
+                out.setRGB(x, y, ((p >>> 24) << 24) | (r << 16) | (g << 8));
+            }
+        }
+        return out;
+    }
+
+    /** Rainbow bands running diagonally, with the original's shading kept. */
+    private static BufferedImage rainbow(BufferedImage src, boolean gui) {
+        float[] rg = range(src);
+        float period = gui ? 64f : 24f;
+        float vmin = gui ? 0.60f : 0.35f;
+        BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                int p = src.getRGB(x, y);
+                int a = p >>> 24;
+                if (a == 0) continue;
+                float t = Math.max(0f, Math.min(1f, (lum(p) - rg[0]) / (rg[1] - rg[0])));
+                float hue = ((x + y) / period) % 1f;
+                out.setRGB(x, y, (a << 24) | (java.awt.Color.HSBtoRGB(hue, 0.85f, vmin + (1f - vmin) * t) & 0xFFFFFF));
+            }
+        }
+        return out;
     }
 
     /** Mostly black with white highlights. */
@@ -410,6 +466,67 @@ public final class PackGenerator {
             }
         }
         return img;
+    }
+
+    /** Steak -> a black noodle pack (stylized pixel art: black bag, red-orange label, green/yellow stripes). */
+    private static BufferedImage mbSteak(BufferedImage src) {
+        int w = src.getWidth(), h = src.getHeight();
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        if (w != 16 || h != 16) return mbBW(src);                      // only the normal 16x16 icon is redrawn
+        int K = 0xFF101012, KG = 0xFF3C3C44, RED = 0xFFE2401C, RD = 0xFFA82410, ORG = 0xFFF0961E,
+                GRN = 0xFF28A03C, YEL = 0xFFFFD000, WH = 0xFFF5F5F5, CRM = 0xFFFFE8B0;
+        for (int y = 3; y <= 12; y++) {                                 // bag
+            for (int x = 1; x <= 14; x++) out.setRGB(x, y, K);
+            if (y % 2 == 0) { out.setRGB(0, y, K); out.setRGB(15, y, K); }   // crimped ends
+        }
+        for (int x = 3; x <= 12; x++) out.setRGB(x, 4, KG);             // glossy top edge
+        for (int y = 5; y <= 8; y++) for (int x = 2; x <= 6; x++) out.setRGB(x, y, y == 8 ? RD : RED);   // label
+        put(out, 3, 6, WH); put(out, 4, 7, WH); put(out, 5, 6, WH);     // squiggle "logo"
+        for (int x = 2; x <= 6; x++) { out.setRGB(x, 9, YEL); out.setRGB(x, 10, GRN); }   // stripes
+        int[][] noodles = {{8,6},{9,5},{10,6},{11,5},{12,6},{13,5},          // two wavy noodle lines
+                {8,9},{9,8},{10,9},{11,8},{12,9},{13,8}};
+        for (int[] n : noodles) out.setRGB(n[0], n[1], ORG);
+        for (int x = 9; x <= 12; x++) out.setRGB(x, 7, CRM);                  // chicken strip between them
+        for (int x = 11; x <= 13; x++) { out.setRGB(x, 11, GRN); }
+        out.setRGB(12, 12, YEL); out.setRGB(13, 12, YEL);
+        for (int x = 7; x <= 9; x++) out.setRGB(x, 11, WH);             // tiny "text"
+        return out;
+    }
+
+    /** Ender pearl -> mostly black, a little white shine, yellow rim on the lower right. */
+    private static BufferedImage mbPearl(BufferedImage src) {
+        int w = src.getWidth(), h = src.getHeight();
+        float[] rg = range(src);
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        int minX = 99, maxX = -1, minY = 99, maxY = -1;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int p = src.getRGB(x, y);
+                int a = p >>> 24;
+                if (a < 40) continue;
+                minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                float v = Math.max(0f, Math.min(1f, (lum(p) - rg[0]) / (rg[1] - rg[0])));
+                int g = Math.round(10 + v * 46);
+                if (v > 0.85f) g = 232;                                // its own shine becomes white
+                out.setRGB(x, y, (a << 24) | (g << 16) | (g << 8) | Math.min(255, g + 4));
+            }
+        }
+        if (maxX < 0) return out;
+        for (int y = 0; y < h; y++) {                                  // yellow rim, lower right
+            for (int x = 0; x < w; x++) {
+                if ((src.getRGB(x, y) >>> 24) < 40) continue;
+                boolean right = x + 1 >= w || (src.getRGB(x + 1, y) >>> 24) < 40;
+                boolean below = y + 1 >= h || (src.getRGB(x, y + 1) >>> 24) < 40;
+                if ((right || below) && x >= (minX + maxX) / 2 && y >= (minY + maxY) / 2 - 1) out.setRGB(x, y, 0xFFFFD000);
+            }
+        }
+        int cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        int[][] glint = {{-2, -3}, {-3, -2}, {-2, -2}};                // white shine, upper left
+        for (int[] d : glint) {
+            int x = cx + d[0], y = cy + d[1];
+            if (x >= 0 && y >= 0 && x < w && y < h && (src.getRGB(x, y) >>> 24) >= 40) out.setRGB(x, y, 0xFFF5F5F5);
+        }
+        return out;
     }
 
     /** Golden apple -> glossy black apple (keeps the original's shading) with a crown, eyes and a smile. */
