@@ -1,54 +1,35 @@
 package mb.texturemenu;
 
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 
-/** Works out the animated "glow" for trimmed armor. */
+/**
+ * Armor never glows in vanilla, so we borrow the ENCHANTMENT GLINT (the shimmering animated overlay).
+ * While a worn armor piece is being drawn, ItemStack.hasFoil() is told to answer "yes".
+ * Speed and strength are the game's own Glint Speed / Glint Strength settings (controlled from our menu).
+ */
 public final class GlowHelper {
-    private static final double STEP = 0.9;           // delay between armor pieces (radians)
+    private static boolean wearing = false;
     private static boolean logged = false;
 
     private GlowHelper() {}
 
-    public static int apply(int light, EquipmentSlot slot) {
-        float g = MBConfig.get().glow;
-        if (g <= 0f) return light;
+    public static void begin() { wearing = true; }
 
-        int rank = rankOf(slot); // boots 0 -> helmet 3
-        long period = MBConfig.get().waveSpeed.ms; // one full wave
-        double t = (System.currentTimeMillis() % period) / (double) period * Math.PI * 2.0;
-        double wave = 0.5 + 0.5 * Math.sin(t - rank * STEP); // higher pieces peak later = wave climbs up
-        // always a little glow (40%), the wave adds the rest; slider scales the whole thing
-        float amount = (float) Math.min(1.0, g * 1.4 * (0.4 + 0.6 * wave));
-        int out = lerpToFullBright(light, amount);
-        if (!logged) {
-            logged = true;
-            MBTextureMenuClient.LOG.info("Trim glow hook is ACTIVE (light {} -> {})", light, out);
-        }
-        return out;
-    }
+    public static void end() { wearing = false; }
 
-    public static boolean hasTrim(ItemStack stack) {
-        return stack != null && stack.get(DataComponents.TRIM) != null;
-    }
-
-    private static int rankOf(EquipmentSlot slot) {
-        return switch (slot) {
-            case FEET -> 0;
-            case LEGS -> 1;
-            case CHEST -> 2;
-            case HEAD -> 3;
-            default -> 0;
+    /** Should this stack show the glint right now? Only true while worn armor is being rendered. */
+    public static boolean shouldFoil(ItemStack stack) {
+        if (!wearing || stack == null) return false;
+        boolean yes = switch (MBConfig.get().glowMode) {
+            case OFF -> false;
+            case TRIMS -> stack.get(DataComponents.TRIM) != null;
+            case ALL -> true;
         };
-    }
-
-    private static int lerpToFullBright(int light, float f) {
-        int block = LightTexture.block(light);
-        int sky = LightTexture.sky(light);
-        block = Math.round(block + (15 - block) * f);
-        sky = Math.round(sky + (15 - sky) * f);
-        return LightTexture.pack(block, sky);
+        if (yes && !logged) {
+            logged = true;
+            MBTextureMenuClient.LOG.info("Armor glow is ACTIVE (glint forced on worn armor)");
+        }
+        return yes;
     }
 }

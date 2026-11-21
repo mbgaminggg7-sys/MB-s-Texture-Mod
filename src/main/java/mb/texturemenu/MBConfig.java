@@ -10,11 +10,8 @@ import java.nio.file.Path;
 public class MBConfig {
     public enum NetheriteMode { NORMAL, DARK, LIGHT }
 
-    public enum WaveSpeed {
-        SLOW(5200L), NORMAL(3200L), FAST(1800L);
-        public final long ms;
-        WaveSpeed(long ms) { this.ms = ms; }
-    }
+    /** Which worn armor gets the animated glint. */
+    public enum GlowMode { OFF, TRIMS, ALL }
 
     public enum SecretTheme { OFF, GOLD, EMERALD, RED, MB, RAINBOW, DIAMOND }
 
@@ -29,10 +26,8 @@ public class MBConfig {
     public NetheriteMode diamondArmor = NetheriteMode.NORMAL;
     public NetheriteMode diamondTools = NetheriteMode.NORMAL;
     public ExtraMode totemShield = ExtraMode.NORMAL;
-    public WaveSpeed waveSpeed = WaveSpeed.NORMAL;
+    public GlowMode glowMode = GlowMode.ALL;
     public SecretTheme secretTheme = SecretTheme.OFF;
-    /** 0.0 - 1.0, how strong the trim glow is. */
-    public float glow = 0.35f;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path FILE = FabricLoader.getInstance().getConfigDir().resolve("mb_texture_menu.json");
@@ -61,9 +56,8 @@ public class MBConfig {
         if (diamondArmor == null) diamondArmor = NetheriteMode.NORMAL;
         if (diamondTools == null) diamondTools = NetheriteMode.NORMAL;
         if (totemShield == null) totemShield = ExtraMode.NORMAL;
-        if (waveSpeed == null) waveSpeed = WaveSpeed.NORMAL;
+        if (glowMode == null) glowMode = GlowMode.ALL;
         if (secretTheme == null) secretTheme = SecretTheme.OFF;
-        glow = Math.max(0f, Math.min(1f, glow));
         return this;
     }
 
