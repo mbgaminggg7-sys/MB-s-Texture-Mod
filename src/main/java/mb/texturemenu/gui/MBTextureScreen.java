@@ -1,5 +1,6 @@
 package mb.texturemenu.gui;
 
+import mb.texturemenu.GlowHelper;
 import mb.texturemenu.MBConfig;
 import mb.texturemenu.MBConfig.ExtraMode;
 import mb.texturemenu.MBConfig.GlowMode;
@@ -51,9 +52,10 @@ public class MBTextureScreen extends Screen {
         addRenderableWidget(Button.builder(glowLabel(), b -> {
             cfg.glowMode = switch (cfg.glowMode) {
                 case OFF -> GlowMode.TRIMS;
-                case TRIMS -> GlowMode.ALL;
-                case ALL -> GlowMode.OFF;
+                case TRIMS -> GlowMode.SHIMMER;
+                case SHIMMER -> GlowMode.OFF;
             };
+            GlowHelper.syncGlint();
             b.setMessage(glowLabel());
         }).bounds(x2, y, bw, 20).build());
 
@@ -77,12 +79,11 @@ public class MBTextureScreen extends Screen {
             b.setMessage(totemLabel());
         }).bounds(x1, y + row * 3, full, 20).build());
 
-        // row 4: glow strength | glow speed - these are the game's own Glint Strength / Glint Speed, live
-        var options = this.minecraft.options;
-        addRenderableWidget(new ValueSlider(x1, y + row * 4, bw, 20, "Glow Strength",
-                () -> options.glintStrength().get(), v -> options.glintStrength().set(v)));
-        addRenderableWidget(new ValueSlider(x2, y + row * 4, bw, 20, "Glow Speed",
-                () -> options.glintSpeed().get(), v -> options.glintSpeed().set(v)));
+        // row 4: glow strength (0-250%) | wave speed - live
+        addRenderableWidget(new ValueSlider(x1, y + row * 4, bw, 20, "Glow Strength", 2.5,
+                () -> cfg.glowStrength, v -> { cfg.glowStrength = (float) v; GlowHelper.syncGlint(); }));
+        addRenderableWidget(new ValueSlider(x2, y + row * 4, bw, 20, "Glow Speed", 1.0,
+                () -> cfg.glowSpeed, v -> { cfg.glowSpeed = (float) v; GlowHelper.syncGlint(); }));
 
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
                 .bounds(x1, y + row * 5 + 6, full, 20).build());
@@ -112,8 +113,8 @@ public class MBTextureScreen extends Screen {
     private Component glowLabel() {
         String m = switch (cfg.glowMode) {
             case OFF -> "Off";
-            case TRIMS -> "Trimmed";
-            case ALL -> "All Armor";
+            case TRIMS -> "Trims";
+            case SHIMMER -> "Shimmer";
         };
         return Component.literal("Armor Glow: " + m);
     }
@@ -149,32 +150,34 @@ public class MBTextureScreen extends Screen {
     @Override
     public void onClose() {
         cfg.save();
-        this.minecraft.options.save();   // keeps the glow strength / speed
+        this.minecraft.options.save();   // keeps the game's glint settings (used by Shimmer mode)
         boolean packsChanged = !cfg.packKey().equals(startKey);
         this.minecraft.setScreen(parent);
         if (packsChanged) PackManager.apply(this.minecraft);
     }
 
-    /** A 0-100% slider wired straight to a game setting; changes show up on your armor immediately. */
+    /** A slider from 0 to (scale x 100)%, wired to a setting; changes show on your armor immediately. */
     private static class ValueSlider extends AbstractSliderButton {
         private final String name;
+        private final double scale;
         private final DoubleConsumer setter;
 
-        ValueSlider(int x, int y, int w, int h, String name, DoubleSupplier getter, DoubleConsumer setter) {
-            super(x, y, w, h, Component.empty(), getter.getAsDouble());
+        ValueSlider(int x, int y, int w, int h, String name, double scale, DoubleSupplier getter, DoubleConsumer setter) {
+            super(x, y, w, h, Component.empty(), Math.max(0, Math.min(1, getter.getAsDouble() / scale)));
             this.name = name;
+            this.scale = scale;
             this.setter = setter;
             updateMessage();
         }
 
         @Override
         protected void updateMessage() {
-            setMessage(Component.literal(name + ": " + Math.round(this.value * 100) + "%"));
+            setMessage(Component.literal(name + ": " + Math.round(this.value * scale * 100) + "%"));
         }
 
         @Override
         protected void applyValue() {
-            setter.accept(this.value);
+            setter.accept(this.value * scale);
         }
     }
 }

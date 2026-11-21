@@ -10,8 +10,8 @@ import java.nio.file.Path;
 public class MBConfig {
     public enum NetheriteMode { NORMAL, DARK, LIGHT }
 
-    /** Which worn armor gets the animated glint. */
-    public enum GlowMode { OFF, TRIMS, ALL }
+    /** OFF, TRIMS = only the trims glow + pulse in a wave, SHIMMER = the enchantment-style shimmer on the whole armor. */
+    public enum GlowMode { OFF, TRIMS, SHIMMER }
 
     public enum SecretTheme { OFF, GOLD, EMERALD, RED, MB, RAINBOW, DIAMOND }
 
@@ -26,7 +26,11 @@ public class MBConfig {
     public NetheriteMode diamondArmor = NetheriteMode.NORMAL;
     public NetheriteMode diamondTools = NetheriteMode.NORMAL;
     public ExtraMode totemShield = ExtraMode.NORMAL;
-    public GlowMode glowMode = GlowMode.ALL;
+    public GlowMode glowMode = GlowMode.TRIMS;
+    /** 0.0 - 2.5  (0% - 250%). Above 100% the pulses get brighter. */
+    public float glowStrength = 1.5f;
+    /** 0.0 - 1.0, how fast the wave runs. */
+    public float glowSpeed = 0.5f;
     public SecretTheme secretTheme = SecretTheme.OFF;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -56,7 +60,9 @@ public class MBConfig {
         if (diamondArmor == null) diamondArmor = NetheriteMode.NORMAL;
         if (diamondTools == null) diamondTools = NetheriteMode.NORMAL;
         if (totemShield == null) totemShield = ExtraMode.NORMAL;
-        if (glowMode == null) glowMode = GlowMode.ALL;
+        if (glowMode == null) glowMode = GlowMode.TRIMS;
+        glowStrength = Math.max(0f, Math.min(2.5f, glowStrength));
+        glowSpeed = Math.max(0f, Math.min(1f, glowSpeed));
         if (secretTheme == null) secretTheme = SecretTheme.OFF;
         return this;
     }

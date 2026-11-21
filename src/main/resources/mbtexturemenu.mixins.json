@@ -6,6 +6,7 @@
   "client": [
     "OptionsScreenMixin",
     "ArmorTrimGlowMixin",
+    "TrimEmissiveMixin",
     "ItemStackFoilMixin",
     "LabelColorMixin"
   ],
