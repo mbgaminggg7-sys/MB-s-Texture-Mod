@@ -79,10 +79,10 @@ public class MBTextureScreen extends Screen {
             b.setMessage(totemLabel());
         }).bounds(x1, y + row * 3, full, 20).build());
 
-        // row 4: glow strength (0-250%) | wave speed - live
-        addRenderableWidget(new ValueSlider(x1, y + row * 4, bw, 20, "Glow Strength", 2.5,
+        // row 4: glow strength (0-500%) | wave speed - live
+        addRenderableWidget(new ValueSlider(x1, y + row * 4, bw, 20, "Glow Strength", 5.0,
                 () -> cfg.glowStrength, v -> { cfg.glowStrength = (float) v; GlowHelper.syncGlint(); }));
-        addRenderableWidget(new ValueSlider(x2, y + row * 4, bw, 20, "Glow Speed", 1.0,
+        addRenderableWidget(new ValueSlider(x2, y + row * 4, bw, 20, "Wave Speed", 1.0,
                 () -> cfg.glowSpeed, v -> { cfg.glowSpeed = (float) v; GlowHelper.syncGlint(); }));
 
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())

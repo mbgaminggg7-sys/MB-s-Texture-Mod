@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "mbtexturemenu",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "name": "MB's Texture",
   "description": "Texture menu in Options: black/white makeovers for inventory, armor, tools, totem and shield, a waving trim glow - plus a secret menu.",
   "authors": [

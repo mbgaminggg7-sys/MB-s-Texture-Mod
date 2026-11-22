@@ -41,7 +41,7 @@ public final class PackGenerator {
     public static final String TOTEM_DARK = "MB Totem Shield Dark" + V;
     public static final String TOTEM_LIGHT = "MB Totem Shield Light" + V;
     public static final String TOTEM_DIAMOND = "MB Totem Shield Diamond" + V;
-    public static final String NEON_TRIMS = "MB Neon Trims" + V;
+    public static String neonName(int level) { return "MB Neon Trims " + level + V; }
 
     public static String secretName(SecretTheme t) {
         return switch (t) {
@@ -128,10 +128,12 @@ public final class PackGenerator {
         if (name.equals(DIAMOND_LIGHT)) return files("white diamond armor", armorFiles("diamond"), grad(WHITE_P), "dia_armor_light");
         if (name.equals(DIAMOND_TOOLS_DARK)) return files("black diamond tools", toolFiles("diamond", false), grad(DARK_P), "dia_tools_dark");
         if (name.equals(DIAMOND_TOOLS_LIGHT)) return files("white diamond tools", toolFiles("diamond", false), grad(WHITE_P), "dia_tools_light");
-        if (name.equals(NEON_TRIMS)) {
+        for (int lv = 1; lv <= 3; lv++) {
+            if (!name.equals(neonName(lv))) continue;
             // trim palettes -> bright neon, so trims pop in any light (trim_palette.png is the KEY palette: untouched)
-            return new Spec("MB's Texture Menu - neon armor trims", List.of("textures/trims/color_palettes"), List.of(),
-                    (path, img) -> path.endsWith("/trim_palette.png") ? img : neonPalette(img), "trim_neon");
+            final int level = lv;
+            return new Spec("MB's Texture Menu - neon armor trims (level " + lv + ")", List.of("textures/trims/color_palettes"),
+                    List.of(), (path, img) -> path.endsWith("/trim_palette.png") ? img : neonPalette(img, level), "trim_neon");
         }
         if (name.equals(TOTEM_DARK)) return files("black totem and shield", totemFiles(), grad(DARK_P), "totem_dark");
         if (name.equals(TOTEM_LIGHT)) return files("white totem and shield", totemFiles(), grad(WHITE_P), "totem_light");
@@ -297,7 +299,11 @@ public final class PackGenerator {
     }
 
     /** Brighter, more saturated palette: same hue, shading kept but lifted (V 0.72-1.0), saturation boosted. */
-    private static BufferedImage neonPalette(BufferedImage src) {
+    private static BufferedImage neonPalette(BufferedImage src, int level) {
+        float satMul = level == 1 ? 1.15f : level == 2 ? 1.30f : 1.55f;
+        float satAdd = level == 1 ? 0.05f : level == 2 ? 0.10f : 0.22f;
+        float vBase = level == 1 ? 0.60f : level == 2 ? 0.72f : 0.88f;
+        float vRange = 1f - vBase;
         BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < src.getHeight(); y++) {
             for (int x = 0; x < src.getWidth(); x++) {
@@ -305,8 +311,8 @@ public final class PackGenerator {
                 int a = p >>> 24;
                 if (a == 0) continue;
                 float[] hsb = java.awt.Color.RGBtoHSB((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF, null);
-                float sat = hsb[1] > 0.08f ? Math.min(1f, hsb[1] * 1.3f + 0.10f) : hsb[1];   // grays stay gray (white glow)
-                float val = 0.72f + 0.28f * hsb[2];
+                float sat = hsb[1] > 0.08f ? Math.min(1f, hsb[1] * satMul + satAdd) : hsb[1];   // grays stay gray (white glow)
+                float val = vBase + vRange * hsb[2];
                 out.setRGB(x, y, (a << 24) | (java.awt.Color.HSBtoRGB(hsb[0], sat, val) & 0xFFFFFF));
             }
         }

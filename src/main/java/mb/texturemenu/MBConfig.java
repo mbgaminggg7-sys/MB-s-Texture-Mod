@@ -27,10 +27,11 @@ public class MBConfig {
     public NetheriteMode diamondTools = NetheriteMode.NORMAL;
     public ExtraMode totemShield = ExtraMode.NORMAL;
     public GlowMode glowMode = GlowMode.TRIMS;
-    /** 0.0 - 2.5  (0% - 250%). Above 100% the pulses get brighter. */
-    public float glowStrength = 1.5f;
+    /** 0.0 - 5.0  (0% - 500%). Above 100% the pulses and the neon get stronger. */
+    public float glowStrength = 4.0f;
+    public int cfgVersion = 0;
     /** 0.0 - 1.0, how fast the wave runs. */
-    public float glowSpeed = 0.5f;
+    public float glowSpeed = 0.6f;
     public SecretTheme secretTheme = SecretTheme.OFF;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -61,7 +62,8 @@ public class MBConfig {
         if (diamondTools == null) diamondTools = NetheriteMode.NORMAL;
         if (totemShield == null) totemShield = ExtraMode.NORMAL;
         if (glowMode == null) glowMode = GlowMode.TRIMS;
-        glowStrength = Math.max(0f, Math.min(2.5f, glowStrength));
+        if (cfgVersion < 2) { glowStrength = 4.0f; glowSpeed = 0.6f; cfgVersion = 2; }   // stronger defaults for everyone
+        glowStrength = Math.max(0f, Math.min(5f, glowStrength));
         glowSpeed = Math.max(0f, Math.min(1f, glowSpeed));
         if (secretTheme == null) secretTheme = SecretTheme.OFF;
         return this;
@@ -69,7 +71,12 @@ public class MBConfig {
 
     /** Anything that changes which resource packs are on. */
     public String packKey() {
-        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode == GlowMode.TRIMS);
+        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode == GlowMode.TRIMS ? "neon" + neonLevel() : "-");
+    }
+
+    /** 1 = soft, 2 = neon, 3 = max neon: how bright/saturated the generated trim colors are. */
+    public int neonLevel() {
+        return glowStrength < 1.5f ? 1 : glowStrength < 3.5f ? 2 : 3;
     }
 
     /** Inventory title text must be light on dark backgrounds. */

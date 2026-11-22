@@ -6,7 +6,6 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
-import org.spongepowered.asm.mixin.injection.invoke.arg.Args;
 
 /**
  * Armor glow.
@@ -47,19 +46,18 @@ public final class GlowHelper {
     // ------------------------------------------------------------------ TRIMS (trim lines only)
 
     /**
-     * Called for every "draw a model" call while armor is drawn. Only the trim call carries a texture sprite
-     * (argument 7), so everything else is left alone. Args: 4 = light, 5 = overlay.
+     * Called for every "draw a model" call while armor is drawn. Only the trim call carries a texture sprite, so
+     * everything else is left alone. Returns {light, overlay} to use for that call.
      */
-    public static void modifyTrimArgs(Args args) {
+    public static int[] adjust(Object sprite, int light, int overlay) {
+        int[] out = {light, overlay};
+        if (!wearing) return out;
         MBConfig c = MBConfig.get();
-        if (!wearing || c.glowMode != GlowMode.TRIMS || c.glowStrength <= 0f) return;
-        if (args.size() < 8) return;
-        Object sprite = args.get(7);
         if (diag < 4) {                                   // a few lines in latest.log to see what the game is doing
             diag++;
-            MBTextureMenuClient.LOG.info("[diag] draw call while wearing armor: args={}, hasSprite={}", args.size(), sprite != null);
+            MBTextureMenuClient.LOG.info("[diag] draw call while wearing armor: hasSprite={}, mode={}", sprite != null, c.glowMode);
         }
-        if (sprite == null) return;
+        if (c.glowMode != GlowMode.TRIMS || c.glowStrength <= 0f || sprite == null) return out;
 
         int rank = slot == null ? 0 : switch (slot) {
             case FEET -> 0;
@@ -69,22 +67,20 @@ public final class GlowHelper {
             default -> 0;
         };
         float s = c.glowStrength;
-        long period = (long) (7000 - 6200 * c.glowSpeed);                  // slow 7s ... fast 0.8s per wave
+        long period = (long) (6000 - 5600 * c.glowSpeed);                  // slow 6s ... fast 0.4s per wave
         double t = (System.currentTimeMillis() % period) / (double) period * Math.PI * 2.0;
         double wave = 0.5 + 0.5 * Math.sin(t - rank * STEP);               // higher pieces peak later = wave climbs up
 
-        int light = args.get(4);
-        args.set(4, lerpToFullBright(light, Math.min(1f, s)));             // always glowing in the dark
-
-        int overlay = args.get(5);
+        out[0] = lerpToFullBright(light, Math.min(1f, s));                 // always glowing in the dark
         if (overlay == OverlayTexture.NO_OVERLAY) {                        // leave the red hurt-flash alone
-            int u = (int) Math.round(wave * Math.min(10.0, s * 4.0));      // pulse: trims wash toward white
-            if (u > 0) args.set(5, OverlayTexture.pack(u, 10));
+            int u = (int) Math.round(wave * Math.min(14.0, s * 4.0));      // pulse: trims wash toward white
+            if (u > 0) out[1] = OverlayTexture.pack(u, 10);
         }
         if (!logged) {
             logged = true;
-            MBTextureMenuClient.LOG.info("Trim glow is ACTIVE (trim submit hooked)");
+            MBTextureMenuClient.LOG.info("Trim glow is ACTIVE (trim draw call hooked)");
         }
+        return out;
     }
 
     private static int lerpToFullBright(int light, float f) {
