@@ -19,6 +19,7 @@ public final class GlowHelper {
     private static boolean wearing = false;
     private static EquipmentSlot slot = null;
     private static boolean logged = false;
+    private static int diag = 0;
 
     private GlowHelper() {}
 
@@ -54,6 +55,10 @@ public final class GlowHelper {
         if (!wearing || c.glowMode != GlowMode.TRIMS || c.glowStrength <= 0f) return;
         if (args.size() < 8) return;
         Object sprite = args.get(7);
+        if (diag < 4) {                                   // a few lines in latest.log to see what the game is doing
+            diag++;
+            MBTextureMenuClient.LOG.info("[diag] draw call while wearing armor: args={}, hasSprite={}", args.size(), sprite != null);
+        }
         if (sprite == null) return;
 
         int rank = slot == null ? 0 : switch (slot) {

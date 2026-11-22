@@ -69,7 +69,7 @@ public class MBConfig {
 
     /** Anything that changes which resource packs are on. */
     public String packKey() {
-        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme;
+        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode == GlowMode.TRIMS);
     }
 
     /** Inventory title text must be light on dark backgrounds. */
