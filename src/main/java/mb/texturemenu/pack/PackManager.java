@@ -36,7 +36,10 @@ public final class PackManager {
             case DIAMOND -> wanted.add(PackGenerator.TOTEM_DIAMOND);
             default -> {}
         }
-        if (cfg.glowMode == MBConfig.GlowMode.TRIMS) wanted.add(PackGenerator.neonName(cfg.neonLevel()));
+        if (cfg.glowMode == MBConfig.GlowMode.TRIMS) {
+            wanted.add(PackGenerator.neonName(cfg.neonLevel()));
+            wanted.add(PackGenerator.animName(cfg.neonLevel(), cfg.speedBucket()));   // animated trims on top
+        }
         if (cfg.secretTheme != SecretTheme.OFF) wanted.add(PackGenerator.secretName(cfg.secretTheme)); // last = on top
 
         for (String name : wanted) PackGenerator.ensure(mc, name);

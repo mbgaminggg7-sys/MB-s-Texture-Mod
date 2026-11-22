@@ -71,12 +71,17 @@ public class MBConfig {
 
     /** Anything that changes which resource packs are on. */
     public String packKey() {
-        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode == GlowMode.TRIMS ? "neon" + neonLevel() : "-");
+        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode == GlowMode.TRIMS ? "neon" + neonLevel() + "s" + speedBucket() : "-");
     }
 
     /** 1 = soft, 2 = neon, 3 = max neon: how bright/saturated the generated trim colors are. */
     public int neonLevel() {
         return glowStrength < 1.5f ? 1 : glowStrength < 3.5f ? 2 : 3;
+    }
+
+    /** 0 = slow, 1 = normal, 2 = fast: the speed of the animated trim pack (applies when you press Done). */
+    public int speedBucket() {
+        return glowSpeed < 0.34f ? 0 : glowSpeed < 0.67f ? 1 : 2;
     }
 
     /** Inventory title text must be light on dark backgrounds. */

@@ -143,7 +143,7 @@ public class MBTextureScreen extends Screen {
         super.render(g, mouseX, mouseY, delta);
         int y = this.height / 6 + 4;
         g.drawCenteredString(this.font, this.title, this.width / 2, y - 18, 0xFFFFFFFF);
-        g.drawCenteredString(this.font, Component.literal("Texture changes apply when you press Done"),
+        g.drawCenteredString(this.font, Component.literal("Texture, glow strength level and wave speed apply when you press Done"),
                 this.width / 2, y + 26 * 5 + 32, 0xFFAAAAAA);
     }
 

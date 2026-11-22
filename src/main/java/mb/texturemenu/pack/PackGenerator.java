@@ -1,5 +1,10 @@
 package mb.texturemenu.pack;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import mb.texturemenu.MBConfig.SecretTheme;
 import mb.texturemenu.MBTextureMenuClient;
 import net.minecraft.client.Minecraft;
@@ -9,6 +14,7 @@ import net.minecraft.server.packs.VanillaPackResources;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,9 +22,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntUnaryOperator;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -42,6 +50,9 @@ public final class PackGenerator {
     public static final String TOTEM_LIGHT = "MB Totem Shield Light" + V;
     public static final String TOTEM_DIAMOND = "MB Totem Shield Diamond" + V;
     public static String neonName(int level) { return "MB Neon Trims " + level + V; }
+
+    /** Animated armor trims: level = brightness (1-3), speed = 0 slow / 1 normal / 2 fast. */
+    public static String animName(int level, int speed) { return "MB Animated Trims L" + level + " S" + speed + V; }
 
     public static String secretName(SecretTheme t) {
         return switch (t) {
@@ -191,6 +202,11 @@ public final class PackGenerator {
 
             Path out = dir.resolve(zipName);
             if (Files.exists(out)) return;
+            if (zipName.startsWith("MB Animated Trims ")) {
+                var m = java.util.regex.Pattern.compile("L(\\d) S(\\d)").matcher(zipName);
+                if (m.find()) buildAnimatedTrims(out, Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), mc.getVanillaPackResources());
+                return;
+            }
             Spec spec = specFor(zipName);
             if (spec == null) return;
             build(out, spec, mc.getVanillaPackResources());
@@ -679,6 +695,164 @@ public final class PackGenerator {
         put(out, hx - 1, hy - 2, YELLOW); put(out, hx, hy - 2, YELLOW); put(out, hx + 1, hy - 2, YELLOW);
         put(out, hx - 1, hy, WHITE); put(out, hx + 1, hy, WHITE);
         put(out, hx - 1, hy + 2, WHITE); put(out, hx, hy + 3, WHITE); put(out, hx + 1, hy + 2, WHITE);
+        return out;
+    }
+
+    // ================================================================ ANIMATED armor trims (real resource-pack animation)
+
+    private static final int FRAMES = 12;
+
+    private static byte[] readAll(VanillaPackResources v, String path) {
+        try {
+            var sup = v.getResource(PackType.CLIENT_RESOURCES, Identifier.fromNamespaceAndPath("minecraft", path));
+            if (sup == null) return null;
+            try (InputStream in = sup.get()) { return in.readAllBytes(); }
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private static BufferedImage readPng(VanillaPackResources v, String path) {
+        byte[] b = readAll(v, path);
+        if (b == null) return null;
+        try { return ImageIO.read(new ByteArrayInputStream(b)); } catch (IOException e) { return null; }
+    }
+
+    private static String stripNs(String id) {
+        if (id.startsWith("minecraft:")) return id.substring(10);
+        return id.contains(":") ? null : id;
+    }
+
+    /**
+     * Rebuilds every humanoid armor trim (all patterns x all materials, normal + leggings) as an ANIMATED texture:
+     * a bright wave runs up the armor. It works by adding our own sprite source to the game's armor_trims atlas
+     * (read from your game files), so the trims use frames + an .mcmeta animation like any animated texture.
+     */
+    private static void buildAnimatedTrims(Path out, int level, int speed, VanillaPackResources vanilla) throws IOException {
+        long t0 = System.currentTimeMillis();
+        byte[] atlasBytes = readAll(vanilla, "atlases/armor_trims.json");
+        if (atlasBytes == null) {
+            MBTextureMenuClient.LOG.warn("armor_trims atlas not found - animated trims skipped");
+            return;
+        }
+        JsonObject atlas = JsonParser.parseString(new String(atlasBytes, StandardCharsets.UTF_8)).getAsJsonObject();
+        JsonArray sources = atlas.getAsJsonArray("sources");
+
+        record Job(String rel, BufferedImage base, Map<Integer, Integer> map) {}
+        List<Job> jobs = new ArrayList<>();
+        for (JsonElement el : sources) {
+            JsonObject src = el.getAsJsonObject();
+            if (!src.get("type").getAsString().endsWith("paletted_permutations")) continue;
+            String keyId = stripNs(src.get("palette_key").getAsString());
+            BufferedImage key = keyId == null ? null : readPng(vanilla, "textures/" + keyId + ".png");
+            if (key == null) continue;
+            String sep = src.has("separator") ? src.get("separator").getAsString() : "_";
+
+            Map<String, Map<Integer, Integer>> maps = new LinkedHashMap<>();
+            for (var e : src.getAsJsonObject("permutations").entrySet()) {
+                String palId = stripNs(e.getValue().getAsString());
+                BufferedImage pal = palId == null ? null : readPng(vanilla, "textures/" + palId + ".png");
+                if (pal == null) continue;
+                pal = neonPalette(pal, level);
+                Map<Integer, Integer> m = new HashMap<>();
+                for (int i = 0; i < Math.min(key.getWidth(), pal.getWidth()); i++) {
+                    m.put(key.getRGB(i, 0) & 0xFFFFFF, pal.getRGB(i, 0) & 0xFFFFFF);
+                }
+                maps.put(e.getKey(), m);
+            }
+            for (JsonElement t : src.getAsJsonArray("textures")) {
+                String texId = stripNs(t.getAsString());
+                if (texId == null || !texId.startsWith("trims/entity/humanoid")) continue;   // humanoid + humanoid_leggings
+                BufferedImage base = readPng(vanilla, "textures/" + texId + ".png");
+                if (base == null) continue;
+                for (var me : maps.entrySet()) {
+                    jobs.add(new Job(texId.substring("trims/".length()) + sep + me.getKey(), base, me.getValue()));
+                }
+            }
+        }
+        if (jobs.isEmpty()) {
+            MBTextureMenuClient.LOG.warn("no trim textures found - animated trims skipped");
+            return;
+        }
+
+        int frametime = speed == 0 ? 4 : speed == 1 ? 2 : 1;                  // ticks per frame
+        Map<String, byte[]> entries = new ConcurrentHashMap<>();
+        jobs.parallelStream().forEach(j -> {
+            try {
+                String path = "assets/minecraft/textures/trims/mb_animated/" + j.rel() + ".png";
+                entries.put(path, toPng(animateStrip(j.base(), j.map(), level)));
+                entries.put(path + ".mcmeta", ("{\"animation\":{\"frametime\":" + frametime + ",\"width\":" + j.base().getWidth()
+                        + ",\"height\":" + j.base().getHeight() + ",\"interpolate\":true}}").getBytes(StandardCharsets.UTF_8));
+            } catch (IOException e) {
+                MBTextureMenuClient.LOG.warn("Skipping {}", j.rel(), e);
+            }
+        });
+
+        // the game's own atlas list + one extra source that comes LAST, so our animated sprites replace the static ones
+        JsonObject dir = new JsonObject();
+        dir.addProperty("type", "minecraft:directory");
+        dir.addProperty("source", "trims/mb_animated");
+        dir.addProperty("prefix", "trims/");
+        sources.add(dir);
+        entries.put("assets/minecraft/atlases/armor_trims.json", new Gson().toJson(atlas).getBytes(StandardCharsets.UTF_8));
+
+        String mcmeta = "{\"pack\":{\"description\":\"MB's Texture Menu - animated armor trims\",\"pack_format\":75,"
+                + "\"min_format\":63,\"max_format\":999}}";
+        byte[] icon = readIcon("trim_neon");
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(out))) {
+            zip.putNextEntry(new ZipEntry("pack.mcmeta"));
+            zip.write(mcmeta.getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            if (icon != null) {
+                zip.putNextEntry(new ZipEntry("pack.png"));
+                zip.write(icon);
+                zip.closeEntry();
+            }
+            for (var e : new java.util.TreeMap<>(entries).entrySet()) {
+                zip.putNextEntry(new ZipEntry(e.getKey()));
+                zip.write(e.getValue());
+                zip.closeEntry();
+            }
+        }
+        MBTextureMenuClient.LOG.info("Generated {} ({} animated trims, {} ms)", out.getFileName(), jobs.size(),
+                System.currentTimeMillis() - t0);
+    }
+
+    /** One vertical strip of FRAMES frames: the recolored trim with a bright band that runs UP the armor. */
+    private static BufferedImage animateStrip(BufferedImage base, Map<Integer, Integer> map, int level) {
+        int w = base.getWidth(), h = base.getHeight(), n = FRAMES;
+        int[] argb = new int[w * h];
+        float[] hh = new float[w * h], ss = new float[w * h], vv = new float[w * h];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int i = y * w + x, p = base.getRGB(x, y), a = p >>> 24;
+                if (a == 0) continue;
+                int rgb = p & 0xFFFFFF;
+                Integer m = map.get(rgb);
+                if (m != null) rgb = m;
+                argb[i] = (a << 24) | rgb;
+                float[] hsb = java.awt.Color.RGBtoHSB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, null);
+                hh[i] = hsb[0]; ss[i] = hsb[1]; vv[i] = hsb[2];
+            }
+        }
+        BufferedImage out = new BufferedImage(w, h * n, BufferedImage.TYPE_INT_ARGB);
+        float amp = level == 1 ? 0.5f : level == 2 ? 0.9f : 1.4f;
+        double sigma = h * 0.14;
+        for (int f = 0; f < n; f++) {
+            double pos = (h - 1) - f * (h / (double) n);                      // band centre, moves UP each frame
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int i = y * w + x, a = argb[i] >>> 24;
+                    if (a == 0) continue;
+                    double dd = y - pos + (x - w / 2.0) * 0.12;               // slight tilt so it looks like a sweep
+                    dd -= h * Math.round(dd / h);                              // wraps around
+                    float band = (float) Math.exp(-(dd * dd) / (2 * sigma * sigma));
+                    float v = Math.min(1f, vv[i] + band * amp * 0.7f);
+                    float s = ss[i] * (1f - Math.min(1f, band * amp * 0.6f));  // centre of the band goes near-white
+                    out.setRGB(x, f * h + y, (a << 24) | (java.awt.Color.HSBtoRGB(hh[i], s, v) & 0xFFFFFF));
+                }
+            }
+        }
         return out;
     }
 
