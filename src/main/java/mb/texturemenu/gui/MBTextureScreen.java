@@ -53,7 +53,8 @@ public class MBTextureScreen extends Screen {
             cfg.glowMode = switch (cfg.glowMode) {
                 case OFF -> GlowMode.TRIMS;
                 case TRIMS -> GlowMode.SHIMMER;
-                case SHIMMER -> GlowMode.OFF;
+                case SHIMMER -> GlowMode.BOTH;
+                case BOTH -> GlowMode.OFF;
             };
             GlowHelper.syncGlint();
             b.setMessage(glowLabel());
@@ -79,10 +80,10 @@ public class MBTextureScreen extends Screen {
             b.setMessage(totemLabel());
         }).bounds(x1, y + row * 3, full, 20).build());
 
-        // row 4: glow strength (0-500%) | wave speed - live
-        addRenderableWidget(new ValueSlider(x1, y + row * 4, bw, 20, "Glow Strength", 5.0,
+        // row 4: glow strength (0-1000%) | shimmer speed
+        addRenderableWidget(new ValueSlider(x1, y + row * 4, bw, 20, "Glow Strength", 10.0,
                 () -> cfg.glowStrength, v -> { cfg.glowStrength = (float) v; GlowHelper.syncGlint(); }));
-        addRenderableWidget(new ValueSlider(x2, y + row * 4, bw, 20, "Wave Speed", 1.0,
+        addRenderableWidget(new ValueSlider(x2, y + row * 4, bw, 20, "Shimmer Speed", 1.0,
                 () -> cfg.glowSpeed, v -> { cfg.glowSpeed = (float) v; GlowHelper.syncGlint(); }));
 
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose())
@@ -113,8 +114,9 @@ public class MBTextureScreen extends Screen {
     private Component glowLabel() {
         String m = switch (cfg.glowMode) {
             case OFF -> "Off";
-            case TRIMS -> "Trims";
+            case TRIMS -> "Neon Trims";
             case SHIMMER -> "Shimmer";
+            case BOTH -> "Both";
         };
         return Component.literal("Armor Glow: " + m);
     }
@@ -143,7 +145,7 @@ public class MBTextureScreen extends Screen {
         super.render(g, mouseX, mouseY, delta);
         int y = this.height / 6 + 4;
         g.drawCenteredString(this.font, this.title, this.width / 2, y - 18, 0xFFFFFFFF);
-        g.drawCenteredString(this.font, Component.literal("Texture, glow strength level and wave speed apply when you press Done"),
+        g.drawCenteredString(this.font, Component.literal("Textures, glow strength and speed steps apply when you press Done"),
                 this.width / 2, y + 26 * 5 + 32, 0xFFAAAAAA);
     }
 

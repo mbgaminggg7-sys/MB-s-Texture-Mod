@@ -31,15 +31,15 @@ public final class GlowHelper {
     // ------------------------------------------------------------------ SHIMMER (whole armor)
 
     public static boolean shouldFoil(ItemStack stack) {
-        return wearing && stack != null && MBConfig.get().glowMode == GlowMode.SHIMMER;
+        return wearing && stack != null && MBConfig.get().glowMode.usesShimmer();
     }
 
     /** Pushes our strength/speed to the game's glint settings (only used by SHIMMER mode). */
     public static void syncGlint() {
         MBConfig c = MBConfig.get();
-        if (c.glowMode != GlowMode.SHIMMER) return;
+        if (!c.glowMode.usesShimmer()) return;
         var options = Minecraft.getInstance().options;
-        options.glintStrength().set((double) Math.min(1f, c.glowStrength));
+        options.glintStrength().set(1.0);                                   // game maximum - the shimmer pack adds the rest
         options.glintSpeed().set((double) c.glowSpeed);
     }
 
@@ -57,7 +57,7 @@ public final class GlowHelper {
             diag++;
             MBTextureMenuClient.LOG.info("[diag] draw call while wearing armor: hasSprite={}, mode={}", sprite != null, c.glowMode);
         }
-        if (c.glowMode != GlowMode.TRIMS || c.glowStrength <= 0f || sprite == null) return out;
+        if (!c.glowMode.usesTrims() || c.glowStrength <= 0f || sprite == null) return out;
 
         int rank = slot == null ? 0 : switch (slot) {
             case FEET -> 0;
@@ -73,7 +73,7 @@ public final class GlowHelper {
 
         out[0] = lerpToFullBright(light, Math.min(1f, s));                 // always glowing in the dark
         if (overlay == OverlayTexture.NO_OVERLAY) {                        // leave the red hurt-flash alone
-            int u = (int) Math.round(wave * Math.min(14.0, s * 4.0));      // pulse: trims wash toward white
+            int u = (int) Math.round(wave * Math.min(14.0, s * 3.0));      // pulse: trims wash toward white
             if (u > 0) out[1] = OverlayTexture.pack(u, 10);
         }
         if (!logged) {

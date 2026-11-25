@@ -10,8 +10,12 @@ import java.nio.file.Path;
 public class MBConfig {
     public enum NetheriteMode { NORMAL, DARK, LIGHT }
 
-    /** OFF, TRIMS = only the trims glow + pulse in a wave, SHIMMER = the enchantment-style shimmer on the whole armor. */
-    public enum GlowMode { OFF, TRIMS, SHIMMER }
+    /** OFF, TRIMS = neon + animated + glowing trims, SHIMMER = enchantment-style shimmer on the armor, BOTH = both. */
+    public enum GlowMode {
+        OFF, TRIMS, SHIMMER, BOTH;
+        public boolean usesTrims() { return this == TRIMS || this == BOTH; }
+        public boolean usesShimmer() { return this == SHIMMER || this == BOTH; }
+    }
 
     public enum SecretTheme { OFF, GOLD, EMERALD, RED, MB, RAINBOW, DIAMOND }
 
@@ -26,12 +30,12 @@ public class MBConfig {
     public NetheriteMode diamondArmor = NetheriteMode.NORMAL;
     public NetheriteMode diamondTools = NetheriteMode.NORMAL;
     public ExtraMode totemShield = ExtraMode.NORMAL;
-    public GlowMode glowMode = GlowMode.TRIMS;
-    /** 0.0 - 5.0  (0% - 500%). Above 100% the pulses and the neon get stronger. */
-    public float glowStrength = 4.0f;
+    public GlowMode glowMode = GlowMode.BOTH;
+    /** 0.0 - 10.0  (0% - 1000%). Higher = brighter neon, stronger wave, stronger shimmer. */
+    public float glowStrength = 10.0f;
     public int cfgVersion = 0;
     /** 0.0 - 1.0, how fast the wave runs. */
-    public float glowSpeed = 0.6f;
+    public float glowSpeed = 0.7f;
     public SecretTheme secretTheme = SecretTheme.OFF;
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -62,8 +66,8 @@ public class MBConfig {
         if (diamondTools == null) diamondTools = NetheriteMode.NORMAL;
         if (totemShield == null) totemShield = ExtraMode.NORMAL;
         if (glowMode == null) glowMode = GlowMode.TRIMS;
-        if (cfgVersion < 2) { glowStrength = 4.0f; glowSpeed = 0.6f; cfgVersion = 2; }   // stronger defaults for everyone
-        glowStrength = Math.max(0f, Math.min(5f, glowStrength));
+        if (cfgVersion < 3) { glowStrength = 10.0f; glowSpeed = 0.7f; glowMode = GlowMode.BOTH; cfgVersion = 3; }   // new defaults
+        glowStrength = Math.max(0f, Math.min(10f, glowStrength));
         glowSpeed = Math.max(0f, Math.min(1f, glowSpeed));
         if (secretTheme == null) secretTheme = SecretTheme.OFF;
         return this;
@@ -71,12 +75,13 @@ public class MBConfig {
 
     /** Anything that changes which resource packs are on. */
     public String packKey() {
-        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode == GlowMode.TRIMS ? "neon" + neonLevel() + "s" + speedBucket() : "-");
+        return inventoryDark + "|" + netherite + "|" + tools + "|" + diamondArmor + "|" + diamondTools + "|" + totemShield + "|" + secretTheme + "|" + (glowMode.usesTrims() ? "neon" + neonLevel() + "s" + speedBucket() : "-")
+                + "|" + (glowMode.usesShimmer() ? "shim" + neonLevel() : "-");
     }
 
-    /** 1 = soft, 2 = neon, 3 = max neon: how bright/saturated the generated trim colors are. */
+    /** 1-5: how bright the neon trims, the animated wave and the shimmer are (changes when you press Done). */
     public int neonLevel() {
-        return glowStrength < 1.5f ? 1 : glowStrength < 3.5f ? 2 : 3;
+        return glowStrength < 1.5f ? 1 : glowStrength < 3.5f ? 2 : glowStrength < 6f ? 3 : glowStrength < 8.5f ? 4 : 5;
     }
 
     /** 0 = slow, 1 = normal, 2 = fast: the speed of the animated trim pack (applies when you press Done). */

@@ -50,6 +50,8 @@ public final class PackGenerator {
     public static final String TOTEM_LIGHT = "MB Totem Shield Light" + V;
     public static final String TOTEM_DIAMOND = "MB Totem Shield Diamond" + V;
     public static String neonName(int level) { return "MB Neon Trims " + level + V; }
+    public static final String EMISSIVE_TRIMS = "MB Emissive Trims" + V;
+    public static String shimmerName(int level) { return "MB Strong Shimmer " + level + V; }
 
     /** Animated armor trims: level = brightness (1-3), speed = 0 slow / 1 normal / 2 fast. */
     public static String animName(int level, int speed) { return "MB Animated Trims L" + level + " S" + speed + V; }
@@ -139,7 +141,15 @@ public final class PackGenerator {
         if (name.equals(DIAMOND_LIGHT)) return files("white diamond armor", armorFiles("diamond"), grad(WHITE_P), "dia_armor_light");
         if (name.equals(DIAMOND_TOOLS_DARK)) return files("black diamond tools", toolFiles("diamond", false), grad(DARK_P), "dia_tools_dark");
         if (name.equals(DIAMOND_TOOLS_LIGHT)) return files("white diamond tools", toolFiles("diamond", false), grad(WHITE_P), "dia_tools_light");
-        for (int lv = 1; lv <= 3; lv++) {
+        for (int lv = 2; lv <= 5; lv++) {
+            if (!name.equals(shimmerName(lv))) continue;
+            // the enchantment glint texture used on armor, boosted: brighter and whiter = a much more noticeable shimmer
+            final float factor = lv == 2 ? 1.5f : lv == 3 ? 2.2f : lv == 4 ? 3.0f : 4.2f;
+            return new Spec("MB's Texture Menu - stronger armor shimmer (level " + lv + ")", List.of(),
+                    List.of("textures/misc/enchanted_glint_entity.png", "textures/misc/enchanted_glint_armor.png"),
+                    (path, img) -> glintBoost(img, factor), "trim_neon");
+        }
+        for (int lv = 1; lv <= 5; lv++) {
             if (!name.equals(neonName(lv))) continue;
             // trim palettes -> bright neon, so trims pop in any light (trim_palette.png is the KEY palette: untouched)
             final int level = lv;
@@ -202,6 +212,10 @@ public final class PackGenerator {
 
             Path out = dir.resolve(zipName);
             if (Files.exists(out)) return;
+            if (zipName.equals(EMISSIVE_TRIMS)) {
+                buildEmissiveTrims(out, mc.getVanillaPackResources());
+                return;
+            }
             if (zipName.startsWith("MB Animated Trims ")) {
                 var m = java.util.regex.Pattern.compile("L(\\d) S(\\d)").matcher(zipName);
                 if (m.find()) buildAnimatedTrims(out, Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)), mc.getVanillaPackResources());
@@ -316,9 +330,9 @@ public final class PackGenerator {
 
     /** Brighter, more saturated palette: same hue, shading kept but lifted (V 0.72-1.0), saturation boosted. */
     private static BufferedImage neonPalette(BufferedImage src, int level) {
-        float satMul = level == 1 ? 1.15f : level == 2 ? 1.30f : 1.55f;
-        float satAdd = level == 1 ? 0.05f : level == 2 ? 0.10f : 0.22f;
-        float vBase = level == 1 ? 0.60f : level == 2 ? 0.72f : 0.88f;
+        float satMul = new float[]{1.15f, 1.30f, 1.55f, 1.80f, 2.00f}[level - 1];
+        float satAdd = new float[]{0.05f, 0.10f, 0.22f, 0.30f, 0.38f}[level - 1];
+        float vBase = new float[]{0.60f, 0.72f, 0.88f, 0.94f, 0.97f}[level - 1];
         float vRange = 1f - vBase;
         BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
         for (int y = 0; y < src.getHeight(); y++) {
@@ -349,7 +363,7 @@ public final class PackGenerator {
         if (path.endsWith("ender_pearl.png")) return mbPearl(src);
         if (path.endsWith("mace.png")) return mbMace(src);
         if (path.contains("_spear")) return mbSpear(src);
-        if (path.endsWith("totem_of_undying.png")) return goldTopIcon(mbBW(src));   // totem gets a gold crown on top
+        if (path.endsWith("totem_of_undying.png")) return mbTotem(src);              // little crown + smile
         if (path.contains("shield")) return mbBW(src);
         if (path.endsWith("_helmet.png")) return goldTopIcon(mbBW(src));
         if (path.endsWith("_sword.png") || path.endsWith("_axe.png") || path.endsWith("_pickaxe.png")) return mbTool(src, true);
@@ -671,6 +685,34 @@ public final class PackGenerator {
         return false;
     }
 
+    /** Totem -> black & white with a little yellow crown on top and a smile on its face (placed from its outline). */
+    private static BufferedImage mbTotem(BufferedImage src) {
+        BufferedImage out = mbBW(src);
+        int minX = 99, maxX = -1, minY = 99;
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                if ((src.getRGB(x, y) >>> 24) > 40) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); }
+            }
+        }
+        if (maxX < 0) return out;
+        int cx = (minX + maxX) / 2, top = minY;
+        for (int y = top + 3; y <= top + 7; y++) {                    // dark patch on the face so the smile reads
+            for (int x = cx - 3; x <= cx + 3; x++) {
+                if (x >= 0 && y >= 0 && x < src.getWidth() && y < src.getHeight() && (src.getRGB(x, y) >>> 24) > 40) {
+                    out.setRGB(x, y, 0xFF000000 | BLACK);
+                }
+            }
+        }
+        String[] crown = {"Y.Y.Y", "YYYYY"};                          // little crown on top of the head
+        for (int r = 0; r < crown.length; r++) {
+            for (int c = 0; c < 5; c++) if (crown[r].charAt(c) == 'Y') put(out, cx - 2 + c, top + r, YELLOW);
+        }
+        put(out, cx - 2, top + 4, WHITE); put(out, cx + 2, top + 4, WHITE);                      // eyes
+        put(out, cx - 2, top + 6, WHITE); put(out, cx - 1, top + 7, WHITE);                      // smile
+        put(out, cx, top + 7, WHITE); put(out, cx + 1, top + 7, WHITE); put(out, cx + 2, top + 6, WHITE);
+        return out;
+    }
+
     /** Mace -> black & white, with a tiny crown and smile on the head (head = upper right of the icon). */
     private static BufferedImage mbMace(BufferedImage src) {
         BufferedImage out = mbBW(src);
@@ -830,13 +872,14 @@ public final class PackGenerator {
                 int rgb = p & 0xFFFFFF;
                 Integer m = map.get(rgb);
                 if (m != null) rgb = m;
+                a = 252;                                                     // marker: "emissive" for the shader
                 argb[i] = (a << 24) | rgb;
                 float[] hsb = java.awt.Color.RGBtoHSB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, null);
                 hh[i] = hsb[0]; ss[i] = hsb[1]; vv[i] = hsb[2];
             }
         }
         BufferedImage out = new BufferedImage(w, h * n, BufferedImage.TYPE_INT_ARGB);
-        float amp = level == 1 ? 0.5f : level == 2 ? 0.9f : 1.4f;
+        float amp = new float[]{0.5f, 0.9f, 1.4f, 1.9f, 2.6f}[level - 1];
         double sigma = h * 0.14;
         for (int f = 0; f < n; f++) {
             double pos = (h - 1) - f * (h / (double) n);                      // band centre, moves UP each frame
@@ -854,6 +897,98 @@ public final class PackGenerator {
             }
         }
         return out;
+    }
+
+    /** Enchantment glint texture boosted: brighter and whiter (the more strength, the stronger). */
+    private static BufferedImage glintBoost(BufferedImage src, float factor) {
+        float white = Math.min(0.55f, (factor - 1f) * 0.14f);
+        BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                int p = src.getRGB(x, y);
+                int a = p >>> 24;
+                int r = clamp(Math.round(((p >> 16) & 0xFF) * factor));
+                int g = clamp(Math.round(((p >> 8) & 0xFF) * factor));
+                int b = clamp(Math.round((p & 0xFF) * factor));
+                r = Math.round(r + (255 - r) * white); g = Math.round(g + (255 - g) * white); b = Math.round(b + (255 - b) * white);
+                out.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Makes trims EMIT light (visible full-bright in the dark): the trim textures get a special alpha (252/255) and the
+     * game's own entity fragment shader is copied with ONE extra condition - pixels with that alpha skip the lighting
+     * multiply. The shader is only patched if its text looks exactly as expected, otherwise it is left out (safe).
+     */
+    private static void buildEmissiveTrims(Path out, VanillaPackResources vanilla) throws IOException {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+
+        // 1) trim pattern textures with the marker alpha
+        byte[] atlasBytes = readAll(vanilla, "atlases/armor_trims.json");
+        if (atlasBytes != null) {
+            JsonObject atlas = JsonParser.parseString(new String(atlasBytes, StandardCharsets.UTF_8)).getAsJsonObject();
+            for (JsonElement el : atlas.getAsJsonArray("sources")) {
+                JsonObject src = el.getAsJsonObject();
+                if (!src.get("type").getAsString().endsWith("paletted_permutations")) continue;
+                for (JsonElement t : src.getAsJsonArray("textures")) {
+                    String texId = stripNs(t.getAsString());
+                    if (texId == null || !texId.startsWith("trims/entity/humanoid")) continue;
+                    BufferedImage base = readPng(vanilla, "textures/" + texId + ".png");
+                    if (base == null) continue;
+                    BufferedImage marked = new BufferedImage(base.getWidth(), base.getHeight(), BufferedImage.TYPE_INT_ARGB);
+                    for (int y = 0; y < base.getHeight(); y++) {
+                        for (int x = 0; x < base.getWidth(); x++) {
+                            int p = base.getRGB(x, y);
+                            marked.setRGB(x, y, (p >>> 24) == 0 ? 0 : (252 << 24) | (p & 0xFFFFFF));
+                        }
+                    }
+                    entries.put("assets/minecraft/textures/" + texId + ".png", toPng(marked));
+                }
+            }
+        }
+
+        // 2) the shader tweak
+        byte[] fsh = readAll(vanilla, "shaders/core/entity.fsh");
+        boolean patched = false;
+        if (fsh != null) {
+            String text = new String(fsh, StandardCharsets.UTF_8);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("color\\s*\\*=\\s*lightMapColor\\s*;").matcher(text);
+            int count = 0;
+            while (m.find()) count++;
+            boolean ok = count == 1 && text.matches("(?s).*sampler2D\\s+Sampler0\\s*;.*")
+                    && text.matches("(?s).*in\\s+vec2\\s+texCoord0\\s*;.*") && !text.contains("MB_EMISSIVE");
+            if (ok) {
+                text = text.replaceFirst("color\\s*\\*=\\s*lightMapColor\\s*;",
+                        java.util.regex.Matcher.quoteReplacement(
+                                "/* MB_EMISSIVE */ if (abs(texture(Sampler0, texCoord0).a - 0.98824) >= 0.004) { color *= lightMapColor; }"));
+                entries.put("assets/minecraft/shaders/core/entity.fsh", text.getBytes(StandardCharsets.UTF_8));
+                patched = true;
+            }
+        }
+        MBTextureMenuClient.LOG.info("Emissive trims: {} marked trim textures, shader patched = {}",
+                entries.size() - (patched ? 1 : 0), patched);
+        if (entries.isEmpty()) return;
+
+        String mcmeta = "{\"pack\":{\"description\":\"MB's Texture Menu - emissive (glowing in the dark) armor trims\","
+                + "\"pack_format\":75,\"min_format\":63,\"max_format\":999}}";
+        byte[] icon = readIcon("trim_neon");
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(out))) {
+            zip.putNextEntry(new ZipEntry("pack.mcmeta"));
+            zip.write(mcmeta.getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+            if (icon != null) {
+                zip.putNextEntry(new ZipEntry("pack.png"));
+                zip.write(icon);
+                zip.closeEntry();
+            }
+            for (var e : entries.entrySet()) {
+                zip.putNextEntry(new ZipEntry(e.getKey()));
+                zip.write(e.getValue());
+                zip.closeEntry();
+            }
+        }
     }
 
     // ================================================================ zip building
